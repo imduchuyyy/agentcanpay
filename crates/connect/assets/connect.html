@@ -1,0 +1,113 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>agentcanpay — connect wallet</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 16px/1.5 system-ui, sans-serif;
+    max-width: 34rem; margin: 0 auto; padding: 3rem 1.25rem;
+  }
+  h1 { font-size: 1.3rem; margin-bottom: .25rem; }
+  p.sub { color: #6b7280; margin-top: 0; }
+  button {
+    font: inherit; padding: .6rem 1rem; border-radius: .5rem;
+    border: 1px solid currentColor; background: transparent;
+    cursor: pointer; margin: .25rem .25rem .25rem 0;
+  }
+  button[disabled] { opacity: .5; cursor: default; }
+  #status { margin-top: 1.5rem; padding: .85rem 1rem; border-radius: .5rem;
+            border: 1px solid #d1d5db; white-space: pre-wrap; }
+  .warn { border-color: #f59e0b !important; }
+  .err  { border-color: #ef4444 !important; }
+  .ok   { border-color: #10b981 !important; }
+  code { word-break: break-all; }
+</style>
+
+<h1>Connect your wallet</h1>
+<p class="sub">agentcanpay will ask you to sign one message. The signature
+derives your agent's wallet — it never leaves this machine.</p>
+
+<div id="wallets"></div>
+<div id="status">Looking for a browser wallet…</div>
+
+<script type="application/json" id="cfg">__CFG__</script>
+<script>
+  const CFG = JSON.parse(document.getElementById("cfg").textContent);
+  const statusEl = document.getElementById("status");
+  const walletsEl = document.getElementById("wallets");
+
+  function say(msg, cls) {
+    statusEl.textContent = msg;
+    statusEl.className = cls || "";
+  }
+
+  async function post(path, body) {
+    const r = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(Object.assign({ token: CFG.token }, body)),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || ("request failed: " + r.status));
+    return data;
+  }
+
+  async function run(provider) {
+    try {
+      walletsEl.innerHTML = "";
+      say("Approve the connection request in your wallet…");
+      const accounts = await provider.request({ method: "eth_requestAccounts" });
+      const account = accounts[0];
+      if (!account) throw new Error("wallet returned no account");
+
+      // The payload is built server-side so it cannot drift from the
+      // struct the CLI hashes.
+      say("Preparing the message…");
+      const { typedData } = await post("/prepare", { address: account });
+
+      say("Sign the message in your wallet to derive your agent wallet.");
+      const signature = await provider.request({
+        method: "eth_signTypedData_v4",
+        params: [account, JSON.stringify(typedData)],
+      });
+
+      await post("/callback", { address: account, signature });
+      say("Done — your agent wallet has been created.\nYou can close this tab.", "ok");
+    } catch (e) {
+      const rejected = e && (e.code === 4001 || /reject|denied/i.test(e.message || ""));
+      say(rejected ? "You rejected the request. Nothing was created."
+                   : "Failed: " + (e.message || e), rejected ? "warn" : "err");
+      post("/cancel", { reason: String((e && e.message) || e) }).catch(() => {});
+    }
+  }
+
+  // EIP-6963 lets several wallets coexist; window.ethereum is the fallback
+  // for older extensions that only inject the legacy global.
+  const found = new Map();
+  window.addEventListener("eip6963:announceProvider", (ev) => {
+    const { info, provider } = ev.detail;
+    found.set(info.uuid, { name: info.name, provider });
+    render();
+  });
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+
+  function render() {
+    if (found.size === 0) return;
+    if (found.size === 1) { run([...found.values()][0].provider); return; }
+    say("Choose which wallet to connect:");
+    walletsEl.innerHTML = "";
+    for (const { name, provider } of found.values()) {
+      const b = document.createElement("button");
+      b.textContent = name;
+      b.onclick = () => run(provider);
+      walletsEl.appendChild(b);
+    }
+  }
+
+  setTimeout(() => {
+    if (found.size > 0) return;
+    if (window.ethereum) { run(window.ethereum); return; }
+    say("No browser wallet detected. Install MetaMask, Rabby, or another "
+      + "EIP-1193 wallet, then reload this page.", "err");
+  }, 500);
+</script>

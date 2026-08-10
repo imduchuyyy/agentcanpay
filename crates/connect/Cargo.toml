@@ -1,0 +1,27 @@
+[package]
+name = "acp-connect"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+alloy.workspace = true
+axum.workspace = true
+getrandom.workspace = true
+hex.workspace = true
+open.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+bytes = "1"
+http-body-util = "0.1.4"
+hyper = { version = "1.11.0", features = ["client", "http1"] }
+hyper-util = { version = "0.1.20", features = ["tokio"] }
+
+[lints]
+workspace = true
