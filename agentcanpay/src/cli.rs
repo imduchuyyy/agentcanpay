@@ -23,6 +23,9 @@ pub enum Command {
     /// Show the recovery phrase to the user. Opens a page where they can
     /// reveal it; the phrase is never printed here.
     Reveal(RevealArgs),
+
+    /// List what the wallet holds, across supported chains.
+    Balance(BalanceArgs),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -75,6 +78,18 @@ pub struct RevealArgs {
     /// Seconds to wait for the user to finish with the page.
     #[arg(long, default_value_t = 300)]
     pub timeout: u64,
+}
+
+#[derive(Args)]
+pub struct BalanceArgs {
+    /// Chain to check, by id or name. Repeatable. Defaults to every
+    /// supported chain, which takes several seconds.
+    #[arg(long)]
+    pub chain: Vec<String>,
+
+    /// Hide holdings worth less than this many USD.
+    #[arg(long, default_value_t = 0.0)]
+    pub min_usd: f64,
 }
 
 #[derive(Args)]

@@ -23,6 +23,7 @@ missing_errors_doc = "allow"
 must_use_candidate = "allow"
 
 [workspace.dependencies]
+acp-api = { path = "crates/api" }
 acp-connect = { path = "crates/connect" }
 acp-keystore = { path = "crates/keystore" }
 acp-wallet = { path = "crates/wallet" }
@@ -35,6 +36,14 @@ alloy = { version = "2.0.5", default-features = false, features = [
 askama = "0.16.0"
 axum = "0.8.9"
 clap = { version = "4.6.6", features = ["derive"] }
+reqwest = { version = "0.13.4", default-features = false, features = [
+    "json",
+    "query",
+    "rustls",
+    "charset",
+    "http2",
+    "system-proxy",
+] }
 getrandom = "0.4.3"
 hex = "0.4.3"
 hkdf = "0.12.4"

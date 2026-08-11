@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `agentcanpay` — a Rust CLI that lets an AI agent hold and use a crypto wallet.
 Commands: `create` (set up the wallet), `address` (print the address),
-`reveal` (show the recovery phrase to the user in a browser page).
+`reveal` (show the recovery phrase to the user in a browser page),
+`balance` (list holdings).
 
 **The CLI is for the agent; the browser page is for the human.** The agent
 cannot know whether the user wants a new wallet or an existing one, so it
@@ -42,7 +43,8 @@ never touch a real wallet at `~/.agentcanpay`.
 | `agentcanpay` | clap parsing, output rendering, exit codes |
 | `crates/wallet` (`acp-wallet`) | phrase generation, BIP-39/44 derivation, `ChainAccount` seam |
 | `crates/keystore` (`acp-keystore`) | secret backends, wallet metadata, atomic writes |
-| `crates/connect` (`acp-connect`) | loopback browser flows: `setup` (used by `create`) and `authorize` |
+| `crates/connect` (`acp-connect`) | loopback browser flows: `setup` (used by `create`), `reveal`, `authorize` |
+| `crates/api` (`acp-api`) | HTTP client for the Socket.tech API — chains, token lists, balances; swap and bridge land here |
 
 `acp-connect::authorize` and `acp-wallet::kdf` implement an alternative flow
 where the wallet is derived from an external wallet's signature. They are
@@ -63,10 +65,12 @@ unit. `acp-connect::setup` is what `create` runs.
 - **`reveal` sends the phrase to the page only when the user asks.** The
   landing page has never seen it, and Hide re-renders without it rather than
   styling it out of view, so a page left open holds nothing.
-- **stdout is an API.** In plain mode every command prints the bare address
-  and nothing else; human text goes to stderr. Under `--json` stdout is a
+- **stdout is an API.** stdout carries the command's result and nothing
+  else; progress and human chatter go to stderr. Under `--json` stdout is a
   single JSON object. Exit codes: 2 no wallet, 3 bad/absent phrase input,
-  4 keystore unavailable, 5 wallet exists.
+  4 keystore unavailable, 5 wallet exists, 6 upstream API failure.
+- **Token amounts stay strings in JSON.** They routinely exceed what an IEEE
+  double holds exactly; the table truncates for display, the JSON does not.
 - **The recovery phrase must never reach stdout or stderr.** The caller is an
   AI agent that reads and logs this process's output, so the phrase is shown
   only in the browser. `Output::wallet` deliberately takes no phrase
@@ -113,6 +117,24 @@ pages display recovery phrases.
   valid alloy feature; the workspace enables an explicit list. Use alloy's
   re-exported `coins_bip39` rather than a direct dependency, since
   `alloy-signer-local` pins `^0.12` and two copies would not unify.
+
+## Talking to the API
+
+`acp-api` wraps `https://public-backend.socket.tech`. No API key is needed.
+Balances arrive with the token list (`userAddress` parameter), so there is
+no RPC endpoint to configure and no on-chain call to make.
+
+- Use `list=trending` for anything user-facing: `full` is ~50k tokens per
+  chain against ~900 for trending.
+- Listing all ~39 supported chains takes roughly 13 seconds and returns
+  about a megabyte, which is why `balance` accepts `--chain`.
+- The supported list includes non-EVM chains (Solana, Bitcoin, Tron), which
+  an EVM wallet will simply hold nothing on.
+- Decoding is deliberately lenient: unknown fields are ignored and nullable
+  fields are `Option`, because upstream returns `null` for unranked or
+  unpriced tokens and adds fields without warning.
+- Tests decode recorded fixtures — never live calls. See
+  `crates/api/tests/fixtures/README.md` to re-record.
 
 ## Testing without a browser
 

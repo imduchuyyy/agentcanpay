@@ -1,0 +1,126 @@
+{
+ "success": true,
+ "statusCode": 200,
+ "result": [
+  {
+   "chainId": 1,
+   "name": "Ethereum",
+   "icon": "https://media.socket.tech/networks/ethereum.svg",
+   "currency": {
+    "address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "icon": "https://media.socket.tech/networks/ethereum.svg",
+    "name": "Ether",
+    "symbol": "ETH",
+    "decimals": 18,
+    "minNativeCurrencyForGas": "15000000000000000"
+   },
+   "explorers": [
+    "https://etherscan.io"
+   ],
+   "sendingEnabled": true,
+   "receivingEnabled": true,
+   "dexes": [
+    "zeroxv2",
+    "openocean",
+    "kyberswap",
+    "bebopPmm",
+    "fynd"
+   ],
+   "bridges": [
+    "across",
+    "relay",
+    "rfq-vault-executor",
+    "celer",
+    "gaszip",
+    "mayan",
+    "near-intents",
+    "oft",
+    "cctp-v2",
+    "cctp-v2-slow",
+    "gnosis-native",
+    "arbitrum-native",
+    "robinhood-native",
+    "native-op-stack",
+    "scroll-native",
+    "polygon-native",
+    "kyo-ag",
+    "eco"
+   ]
+  },
+  {
+   "chainId": 10,
+   "name": "Optimism",
+   "icon": "https://media.socket.tech/networks/optimism.svg",
+   "currency": {
+    "address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "name": "Ether",
+    "symbol": "ETH",
+    "decimals": 18,
+    "icon": "https://media.socket.tech/networks/ethereum.svg",
+    "minNativeCurrencyForGas": "900000000000000"
+   },
+   "explorers": [
+    "https://optimistic.etherscan.io"
+   ],
+   "sendingEnabled": true,
+   "receivingEnabled": true,
+   "dexes": [
+    "zeroxv2",
+    "openocean",
+    "kyberswap",
+    "bebopPmm"
+   ],
+   "bridges": [
+    "across",
+    "relay",
+    "celer",
+    "gaszip",
+    "mayan",
+    "near-intents",
+    "oft",
+    "cctp-v2",
+    "cctp-v2-slow",
+    "native-op-stack",
+    "kyo-ag",
+    "eco"
+   ]
+  },
+  {
+   "chainId": 56,
+   "name": "BNB",
+   "icon": "https://media.socket.tech/networks/bsc.svg",
+   "currency": {
+    "address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "name": "Binance Chain Native Token",
+    "symbol": "BNB",
+    "decimals": 18,
+    "minNativeCurrencyForGas": "1400000000000000",
+    "icon": "https://media.socket.tech/tokens/all/BNB"
+   },
+   "explorers": [
+    "https://bscscan.com"
+   ],
+   "sendingEnabled": true,
+   "receivingEnabled": true,
+   "dexes": [
+    "zeroxv2",
+    "openocean",
+    "kyberswap",
+    "bebopPmm",
+    "fynd"
+   ],
+   "bridges": [
+    "across",
+    "relay",
+    "rfq-vault-executor",
+    "celer",
+    "gaszip",
+    "mayan",
+    "near-intents",
+    "oft",
+    "eco"
+   ]
+  }
+ ],
+ "message": null
+}

@@ -1,4 +1,5 @@
 pub mod address;
+pub mod balance;
 pub mod create;
 pub mod reveal;
 pub mod store;
@@ -21,6 +22,12 @@ pub enum CommandError {
 
     #[error("wallet has no account for chain `{0}`")]
     NoAccountForChain(String),
+
+    #[error("unknown chain `{0}`; see the supported list")]
+    UnknownChain(String),
+
+    #[error(transparent)]
+    Api(#[from] acp_api::ApiError),
 }
 
 impl CommandError {
@@ -40,6 +47,8 @@ impl CommandError {
             ) => "invalid_phrase",
             Self::Wallet(_) => "wallet",
             Self::NoAccountForChain(_) => "no_account_for_chain",
+            Self::UnknownChain(_) => "unknown_chain",
+            Self::Api(_) => "api",
         }
     }
 
@@ -59,6 +68,9 @@ impl CommandError {
                 | acp_keystore::KeystoreError::NoCredentialStore,
             ) => 4,
             Self::Keystore(acp_keystore::KeystoreError::WalletExists) => 5,
+            // 6 is "the outside world did not cooperate" — retryable, and
+            // distinct from anything wrong with the wallet itself.
+            Self::Api(_) => 6,
             _ => 1,
         };
         ExitCode::from(code)
