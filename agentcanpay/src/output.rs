@@ -1,3 +1,4 @@
+use acp_api::Chain;
 use acp_keystore::{Backend, Source};
 use acp_wallet::DerivedAccount;
 
@@ -129,6 +130,56 @@ impl Output {
             "",
             format!("${total_usd:.2}")
         );
+    }
+
+    /// Lists supported chains. `usable` is carried explicitly so an agent
+    /// asking with `--all` can still tell which it can act on.
+    pub fn chains(&self, chains: &[Chain]) {
+        if self.json {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "chains": chains.iter().map(|c| serde_json::json!({
+                        "chain_id": c.chain_id,
+                        "name": c.name,
+                        "native_symbol": c.currency.symbol,
+                        "native_decimals": c.currency.decimals,
+                        "usable": c.is_evm(),
+                        "sending_enabled": c.sending_enabled,
+                        "receiving_enabled": c.receiving_enabled,
+                    })).collect::<Vec<_>>(),
+                })
+            );
+            return;
+        }
+
+        if chains.is_empty() {
+            eprintln!("  no chains available");
+            return;
+        }
+
+        let name_width = chains
+            .iter()
+            .map(|c| c.name.len())
+            .max()
+            .unwrap_or(4)
+            .max(4);
+        println!(
+            "{:>12}  {:<name_width$}  {:<6}",
+            "CHAIN ID", "NAME", "NATIVE"
+        );
+        for c in chains {
+            // Only ever printed under --all; the default list is all usable.
+            let flag = if c.is_evm() {
+                ""
+            } else {
+                "  (not usable by this wallet)"
+            };
+            println!(
+                "{:>12}  {:<name_width$}  {:<6}{flag}",
+                c.chain_id, c.name, c.currency.symbol
+            );
+        }
     }
 
     pub fn error(&self, err: &CommandError) {

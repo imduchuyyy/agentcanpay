@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `agentcanpay` — a Rust CLI that lets an AI agent hold and use a crypto wallet.
 Commands: `create` (set up the wallet), `address` (print the address),
 `reveal` (show the recovery phrase to the user in a browser page),
-`balance` (list holdings).
+`balance` (list holdings), `chains` (list supported chains).
 
 **The CLI is for the agent; the browser page is for the human.** The agent
 cannot know whether the user wants a new wallet or an existing one, so it
@@ -128,8 +128,12 @@ no RPC endpoint to configure and no on-chain call to make.
   chain against ~900 for trending.
 - Listing all ~39 supported chains takes roughly 13 seconds and returns
   about a megabyte, which is why `balance` accepts `--chain`.
-- The supported list includes non-EVM chains (Solana, Bitcoin, Tron), which
-  an EVM wallet will simply hold nothing on.
+- The supported list includes non-EVM chains (Solana, Bitcoin, Tron, Stellar,
+  Sui), which an EVM wallet cannot use. The API exposes **nothing** to tell
+  them apart — all but Bitcoin report the same `0xeeee…` sentinel as their
+  native currency address — so `Chain::is_evm` consults a hand-maintained
+  list in `chains.rs`. Update it when Socket adds a chain, or a new non-EVM
+  one will be reported as usable.
 - Decoding is deliberately lenient: unknown fields are ignored and nullable
   fields are `Option`, because upstream returns `null` for unranked or
   unpriced tokens and adds fields without warning.

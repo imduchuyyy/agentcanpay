@@ -26,6 +26,9 @@ pub enum Command {
 
     /// List what the wallet holds, across supported chains.
     Balance(BalanceArgs),
+
+    /// List the chains this CLI can work with.
+    Chains(ChainsArgs),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -78,6 +81,13 @@ pub struct RevealArgs {
     /// Seconds to wait for the user to finish with the page.
     #[arg(long, default_value_t = 300)]
     pub timeout: u64,
+}
+
+#[derive(Args)]
+pub struct ChainsArgs {
+    /// Include chains this wallet cannot use, such as Bitcoin and Solana.
+    #[arg(long)]
+    pub all: bool,
 }
 
 #[derive(Args)]

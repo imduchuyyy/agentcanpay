@@ -1,5 +1,6 @@
 pub mod address;
 pub mod balance;
+pub mod chains;
 pub mod create;
 pub mod reveal;
 pub mod store;
