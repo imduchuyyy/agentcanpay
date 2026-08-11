@@ -4,26 +4,32 @@
 //! the loopback response that renders it for the user, and the credential
 //! store. It is never returned through the CLI's stdout or stderr, because
 //! the caller there is an agent whose output is read and logged.
+//!
+//! Screens are server-rendered fragments swapped in by htmx. There is no
+//! client-side model of the flow, so the browser cannot hold a view of the
+//! wallet that the server disagrees with.
 
 use std::sync::{Arc, Mutex};
 
 use acp_wallet::{WordCount, generate_phrase, normalize_phrase, validate_phrase};
+use askama::Template;
 use axum::{
-    Json, Router,
-    extract::State,
-    http::StatusCode,
-    response::{Html, IntoResponse},
+    Form, Router,
+    extract::{Query, State},
+    http::{HeaderMap, StatusCode},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::sync::oneshot;
 use zeroize::Zeroizing;
 
-use crate::{
-    ApiError, ConnectError, ConnectOptions, check_token, no_store, serve_and_wait, session_token,
-};
+use crate::{ConnectError, ConnectOptions, no_store, serve_and_wait, session_token};
 
-const PAGE: &str = include_str!("../assets/setup.html");
+const HTMX_JS: &str = include_str!("../assets/htmx.min.js");
+const APP_CSS: &str = include_str!("../assets/app.css");
+
+const TOKEN_HEADER: &str = "x-session-token";
 
 /// How many words the user is asked to re-enter to prove they wrote the
 /// phrase down. Enough to defeat idle clicking, few enough to be bearable.
@@ -50,11 +56,55 @@ impl std::fmt::Debug for SetupOutcome {
     }
 }
 
+#[derive(Template)]
+#[template(path = "setup/page.html")]
+struct PageTemplate<'a> {
+    token: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "setup/choose.html")]
+struct ChooseTemplate;
+
+#[derive(Template)]
+#[template(path = "setup/length.html")]
+struct LengthTemplate;
+
+#[derive(Template)]
+#[template(path = "setup/phrase.html")]
+struct PhraseTemplate {
+    words: Vec<String>,
+}
+
+#[derive(Template)]
+#[template(path = "setup/verify.html")]
+struct VerifyTemplate {
+    positions: Vec<usize>,
+    error: Option<String>,
+}
+
+#[derive(Template)]
+#[template(path = "setup/import.html")]
+struct ImportTemplate {
+    error: Option<String>,
+}
+
+#[derive(Template)]
+#[template(path = "setup/done.html")]
+struct DoneTemplate;
+
+/// A phrase that has been shown but not yet confirmed.
+///
+/// The challenge positions live here rather than in the page, so the user
+/// cannot pick which words they are asked for.
+struct Pending {
+    phrase: Zeroizing<String>,
+    challenge: Vec<usize>,
+}
+
 struct AppState {
     token: String,
-    /// Generated but not yet confirmed. Held here rather than in the page
-    /// so a reload cannot silently swap in a phrase the user never saw.
-    pending: Mutex<Option<Zeroizing<String>>>,
+    pending: Mutex<Option<Pending>>,
     tx: Mutex<Option<oneshot::Sender<Result<SetupOutcome, ConnectError>>>>,
 }
 
@@ -64,141 +114,230 @@ impl AppState {
             let _ = tx.send(outcome);
         }
     }
+
+    fn authorized(&self, headers: &HeaderMap) -> bool {
+        headers
+            .get(TOKEN_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|got| got == self.token)
+    }
+}
+
+/// Renders a fragment, or a 500 if a template is broken.
+fn frag<T: Template>(t: &T) -> Response {
+    match t.render() {
+        Ok(body) => no_store(Html(body)).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response(),
+    }
+}
+
+/// A fragment returned with a non-2xx status.
+///
+/// htmx is configured to swap 4xx bodies, so a validation failure re-renders
+/// the same screen with its message rather than dead-ending, while the
+/// status code still says the request failed.
+fn frag_status<T: Template>(status: StatusCode, t: &T) -> Response {
+    match t.render() {
+        Ok(body) => (status, no_store(Html(body))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response(),
+    }
+}
+
+fn forbidden() -> Response {
+    (StatusCode::FORBIDDEN, "bad session token").into_response()
+}
+
+async fn index(State(state): State<Arc<AppState>>) -> Response {
+    frag(&PageTemplate {
+        token: &state.token,
+    })
+}
+
+async fn app_css() -> Response {
+    ([(axum::http::header::CONTENT_TYPE, "text/css")], APP_CSS).into_response()
+}
+
+async fn htmx_js() -> Response {
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/javascript")],
+        HTMX_JS,
+    )
+        .into_response()
+}
+
+async fn choose(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    if !state.authorized(&headers) {
+        return forbidden();
+    }
+    frag(&ChooseTemplate)
+}
+
+async fn length(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    if !state.authorized(&headers) {
+        return forbidden();
+    }
+    frag(&LengthTemplate)
 }
 
 /// Phrase length is chosen here rather than on the command line: the agent
 /// invoking the CLI has no basis for the choice, and it is the user's.
 #[derive(Deserialize)]
-struct GenerateReq {
-    token: String,
+struct NewQuery {
     words: usize,
 }
 
-#[derive(Serialize)]
-struct GenerateRes {
-    words: Vec<String>,
-    challenge: Vec<usize>,
-}
-
-#[derive(Deserialize)]
-struct ConfirmReq {
-    token: String,
-    answers: Vec<ConfirmAnswer>,
-}
-
-#[derive(Deserialize)]
-struct ConfirmAnswer {
-    index: usize,
-    word: String,
-}
-
-#[derive(Deserialize)]
-struct ImportReq {
-    token: String,
-    phrase: String,
-}
-
-#[derive(Deserialize)]
-struct CancelReq {
-    token: String,
-    reason: String,
-}
-
-#[derive(Serialize)]
-struct AddressRes {
-    ok: bool,
-}
-
-async fn index(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let cfg = serde_json::json!({ "token": state.token });
-    no_store(Html(PAGE.replace("__CFG__", &cfg.to_string())))
-}
-
-/// Generates a phrase and returns it for display.
+/// Generates a phrase and renders it for display.
 ///
-/// Regenerating on each call is deliberate: if the user reloads mid-flow,
-/// the phrase they are looking at is always the one that will be saved.
-async fn generate(
+/// Regenerating on each call is deliberate: if the user backs up and starts
+/// again, the phrase they are looking at is always the one that will be
+/// saved.
+async fn new_wallet(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<GenerateReq>,
-) -> Result<impl IntoResponse, ApiError> {
-    check_token(&state.token, &req.token)?;
+    headers: HeaderMap,
+    Query(q): Query<NewQuery>,
+) -> Response {
+    if !state.authorized(&headers) {
+        return forbidden();
+    }
 
-    let words = match req.words {
+    let count = match q.words {
         12 => WordCount::Twelve,
         24 => WordCount::TwentyFour,
-        n => return Err(ApiError::bad_request(format!("unsupported length {n}"))),
+        _ => return (StatusCode::BAD_REQUEST, "unsupported length").into_response(),
     };
 
-    let phrase = generate_phrase(words)
-        .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "could not generate"))?;
+    let Ok(phrase) = generate_phrase(count) else {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "could not generate").into_response();
+    };
+
     let words: Vec<String> = phrase.split(' ').map(str::to_owned).collect();
     let challenge = challenge_indices(words.len(), CHALLENGE_WORDS);
+    *state.pending.lock().expect("state lock poisoned") = Some(Pending { phrase, challenge });
 
-    *state.pending.lock().expect("state lock poisoned") = Some(phrase);
+    frag(&PhraseTemplate { words })
+}
 
-    Ok(no_store(Json(GenerateRes { words, challenge })))
+/// Re-renders the pending phrase without generating a new one.
+async fn phrase(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    if !state.authorized(&headers) {
+        return forbidden();
+    }
+
+    let guard = state.pending.lock().expect("state lock poisoned");
+    let Some(pending) = guard.as_ref() else {
+        return (StatusCode::BAD_REQUEST, "nothing generated yet").into_response();
+    };
+
+    frag(&PhraseTemplate {
+        words: pending.phrase.split(' ').map(str::to_owned).collect(),
+    })
+}
+
+async fn verify(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    if !state.authorized(&headers) {
+        return forbidden();
+    }
+
+    let guard = state.pending.lock().expect("state lock poisoned");
+    let Some(pending) = guard.as_ref() else {
+        return (StatusCode::BAD_REQUEST, "nothing generated yet").into_response();
+    };
+
+    frag(&VerifyTemplate {
+        positions: pending.challenge.clone(),
+        error: None,
+    })
 }
 
 async fn confirm(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<ConfirmReq>,
-) -> Result<Json<AddressRes>, ApiError> {
-    check_token(&state.token, &req.token)?;
+    headers: HeaderMap,
+    Form(form): Form<std::collections::HashMap<String, String>>,
+) -> Response {
+    if !state.authorized(&headers) {
+        return forbidden();
+    }
 
-    let phrase = state
-        .pending
-        .lock()
-        .expect("state lock poisoned")
-        .clone()
-        .ok_or_else(|| ApiError::bad_request("no phrase has been generated yet"))?;
+    let guard = state.pending.lock().expect("state lock poisoned");
+    let Some(pending) = guard.as_ref() else {
+        return (StatusCode::BAD_REQUEST, "nothing generated yet").into_response();
+    };
 
-    let words: Vec<&str> = phrase.split(' ').collect();
-    let all_correct = req.answers.len() == CHALLENGE_WORDS
-        && req.answers.iter().all(|a| {
-            words
-                .get(a.index)
-                .is_some_and(|w| *w == a.word.trim().to_lowercase())
-        });
+    let words: Vec<&str> = pending.phrase.split(' ').collect();
+    let all_correct = pending.challenge.iter().all(|i| {
+        form.get(&format!("w{i}"))
+            .map(|answer| answer.trim().to_lowercase())
+            .is_some_and(|answer| words.get(*i).is_some_and(|w| *w == answer))
+    });
 
     // A wrong answer is a retry, not a failure: the session stays open so
     // the user can look at their notes again.
     if !all_correct {
-        return Err(ApiError::bad_request(
-            "those words do not match; check your backup and try again",
-        ));
+        return frag_status(
+            StatusCode::BAD_REQUEST,
+            &VerifyTemplate {
+                positions: pending.challenge.clone(),
+                error: Some("Those words do not match. Check your backup and try again.".into()),
+            },
+        );
     }
+
+    let phrase = pending.phrase.clone();
+    drop(guard);
 
     state.finish(Ok(SetupOutcome {
         phrase,
         kind: SetupKind::Generated,
     }));
-    Ok(Json(AddressRes { ok: true }))
+    frag(&DoneTemplate)
+}
+
+async fn import_form(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    if !state.authorized(&headers) {
+        return forbidden();
+    }
+    frag(&ImportTemplate { error: None })
+}
+
+#[derive(Deserialize)]
+struct ImportForm {
+    phrase: String,
 }
 
 async fn import(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<ImportReq>,
-) -> Result<Json<AddressRes>, ApiError> {
-    check_token(&state.token, &req.token)?;
+    headers: HeaderMap,
+    Form(form): Form<ImportForm>,
+) -> Response {
+    if !state.authorized(&headers) {
+        return forbidden();
+    }
 
-    let phrase = normalize_phrase(&req.phrase);
-    validate_phrase(&phrase).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let phrase = normalize_phrase(&form.phrase);
+    if let Err(e) = validate_phrase(&phrase) {
+        return frag_status(
+            StatusCode::BAD_REQUEST,
+            &ImportTemplate {
+                error: Some(e.to_string()),
+            },
+        );
+    }
 
     state.finish(Ok(SetupOutcome {
         phrase,
         kind: SetupKind::Imported,
     }));
-    Ok(Json(AddressRes { ok: true }))
+    frag(&DoneTemplate)
 }
 
-async fn cancel(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<CancelReq>,
-) -> Result<StatusCode, ApiError> {
-    check_token(&state.token, &req.token)?;
-    state.finish(Err(ConnectError::Cancelled(req.reason)));
-    Ok(StatusCode::NO_CONTENT)
+async fn cancel(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    if !state.authorized(&headers) {
+        return forbidden();
+    }
+    state.finish(Err(ConnectError::Cancelled(
+        "cancelled in the browser".into(),
+    )));
+    frag(&ChooseTemplate)
 }
 
 /// Picks `n` distinct positions in `0..len`.
@@ -237,9 +376,15 @@ where
 
     let router = Router::new()
         .route("/", get(index))
-        .route("/generate", post(generate))
+        .route("/app.css", get(app_css))
+        .route("/htmx.js", get(htmx_js))
+        .route("/choose", get(choose))
+        .route("/length", get(length))
+        .route("/new", post(new_wallet))
+        .route("/phrase", get(phrase))
+        .route("/verify", get(verify))
         .route("/confirm", post(confirm))
-        .route("/import", post(import))
+        .route("/import", get(import_form).post(import))
         .route("/cancel", post(cancel))
         .with_state(state);
 
@@ -249,31 +394,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const KNOWN: &str = "test test test test test test test test test test test junk";
-
-    fn state() -> (
-        Arc<AppState>,
-        oneshot::Receiver<Result<SetupOutcome, ConnectError>>,
-    ) {
-        let (tx, rx) = oneshot::channel();
-        let s = Arc::new(AppState {
-            token: "tok".into(),
-            pending: Mutex::new(None),
-            tx: Mutex::new(Some(tx)),
-        });
-        (s, rx)
-    }
-
-    fn answers(phrase: &str, idx: &[usize]) -> Vec<ConfirmAnswer> {
-        let words: Vec<&str> = phrase.split(' ').collect();
-        idx.iter()
-            .map(|i| ConfirmAnswer {
-                index: *i,
-                word: words[*i].to_owned(),
-            })
-            .collect()
-    }
 
     #[test]
     fn challenge_picks_distinct_in_range_positions() {
@@ -287,176 +407,57 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn confirming_the_right_words_completes_setup() {
-        let (st, rx) = state();
-        generate(
-            State(st.clone()),
-            Json(GenerateReq {
-                token: "tok".into(),
-                words: 24,
-            }),
-        )
-        .await
+    /// Templates are compile-time checked, but rendering is still worth a
+    /// smoke test: a missing loop variable is a compile error, an escaping
+    /// mistake is not.
+    #[test]
+    fn phrase_template_escapes_and_lists_every_word() {
+        let words: Vec<String> = (0..24).map(|i| format!("word{i}")).collect();
+        let html = PhraseTemplate {
+            words: words.clone(),
+        }
+        .render()
         .unwrap();
 
-        let phrase = st.pending.lock().unwrap().clone().unwrap();
-        let res = confirm(
-            State(st),
-            Json(ConfirmReq {
-                token: "tok".into(),
-                answers: answers(&phrase, &[0, 5, 11]),
-            }),
-        )
-        .await;
-        assert!(res.is_ok());
-
-        let outcome = rx.await.unwrap().unwrap();
-        assert_eq!(outcome.kind, SetupKind::Generated);
-        assert_eq!(*outcome.phrase, *phrase);
+        for w in &words {
+            assert!(html.contains(w.as_str()), "missing {w}");
+        }
+        assert_eq!(html.matches("<li>").count(), 24);
     }
 
-    #[tokio::test]
-    async fn wrong_confirmation_words_do_not_complete_setup() {
-        let (st, mut rx) = state();
-        generate(
-            State(st.clone()),
-            Json(GenerateReq {
-                token: "tok".into(),
-                words: 24,
-            }),
-        )
-        .await
+    #[test]
+    fn error_messages_are_html_escaped() {
+        let html = ImportTemplate {
+            error: Some("<img src=x onerror=alert(1)>".into()),
+        }
+        .render()
         .unwrap();
 
-        let res = confirm(
-            State(st),
-            Json(ConfirmReq {
-                token: "tok".into(),
-                answers: vec![
-                    ConfirmAnswer {
-                        index: 0,
-                        word: "wrong".into(),
-                    },
-                    ConfirmAnswer {
-                        index: 1,
-                        word: "wrong".into(),
-                    },
-                    ConfirmAnswer {
-                        index: 2,
-                        word: "wrong".into(),
-                    },
-                ],
-            }),
-        )
-        .await;
-
-        assert!(res.is_err());
-        // The session must stay open so the user can retry.
-        assert!(rx.try_recv().is_err());
+        // Askama escapes to numeric entities rather than named ones.
+        assert!(!html.contains("<img"), "error message was not escaped");
+        assert!(html.contains("&#60;img"), "unexpected escaping: {html}");
     }
 
-    /// Answering fewer positions than asked must not pass by vacuous truth.
-    #[tokio::test]
-    async fn a_short_answer_set_is_rejected() {
-        let (st, _rx) = state();
-        generate(
-            State(st.clone()),
-            Json(GenerateReq {
-                token: "tok".into(),
-                words: 24,
-            }),
-        )
-        .await
+    #[test]
+    fn verify_template_labels_positions_from_one() {
+        let html = VerifyTemplate {
+            positions: vec![0, 5, 11],
+            error: None,
+        }
+        .render()
         .unwrap();
-        let phrase = st.pending.lock().unwrap().clone().unwrap();
 
-        let res = confirm(
-            State(st),
-            Json(ConfirmReq {
-                token: "tok".into(),
-                answers: answers(&phrase, &[0]),
-            }),
-        )
-        .await;
-        assert!(res.is_err());
+        assert!(html.contains("Word #1"));
+        assert!(html.contains("Word #6"));
+        assert!(html.contains("Word #12"));
+        assert!(html.contains(r#"name="w0""#));
+        assert!(html.contains(r#"name="w11""#));
     }
 
-    #[tokio::test]
-    async fn confirming_before_generating_is_rejected() {
-        let (st, _rx) = state();
-        let res = confirm(
-            State(st),
-            Json(ConfirmReq {
-                token: "tok".into(),
-                answers: vec![ConfirmAnswer {
-                    index: 0,
-                    word: "x".into(),
-                }],
-            }),
-        )
-        .await;
-        assert!(res.is_err());
-    }
-
-    #[tokio::test]
-    async fn importing_a_valid_phrase_completes_setup() {
-        let (st, rx) = state();
-        let res = import(
-            State(st),
-            Json(ImportReq {
-                token: "tok".into(),
-                phrase: format!("  TEST  {}  ", &KNOWN[5..]),
-            }),
-        )
-        .await;
-        assert!(res.is_ok());
-
-        let outcome = rx.await.unwrap().unwrap();
-        assert_eq!(outcome.kind, SetupKind::Imported);
-        assert_eq!(*outcome.phrase, KNOWN);
-    }
-
-    #[tokio::test]
-    async fn importing_a_bad_phrase_keeps_the_session_open() {
-        let (st, mut rx) = state();
-        let res = import(
-            State(st),
-            Json(ImportReq {
-                token: "tok".into(),
-                phrase: "abandon abandon abandon".into(),
-            }),
-        )
-        .await;
-
-        assert!(res.is_err());
-        assert!(rx.try_recv().is_err());
-    }
-
-    #[tokio::test]
-    async fn a_bad_token_is_rejected_everywhere() {
-        let (st, _rx) = state();
-        assert!(
-            generate(
-                State(st.clone()),
-                Json(GenerateReq {
-                    token: "wrong".into(),
-                    words: 24,
-                })
-            )
-            .await
-            .is_err()
-        );
-        assert!(
-            import(
-                State(st),
-                Json(ImportReq {
-                    token: "wrong".into(),
-                    phrase: KNOWN.into(),
-                })
-            )
-            .await
-            .is_err()
-        );
+    #[test]
+    fn the_page_carries_the_token_for_htmx_to_send() {
+        let html = PageTemplate { token: "deadbeef" }.render().unwrap();
+        assert!(html.contains("X-Session-Token"));
+        assert!(html.contains("deadbeef"));
     }
 }

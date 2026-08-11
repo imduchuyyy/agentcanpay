@@ -75,6 +75,25 @@ unit. `acp-connect::setup` is what `create` runs.
   `store::write_private` (temp file + atomic rename). Do not write secrets
   with plain `fs::write`.
 
+## Browser UI
+
+Screens are Askama templates in `crates/connect/templates/`, rendered
+server-side and swapped in by htmx. There is no client-side model of the
+flow, no bundler, and no npm dependency tree — deliberate, because these
+pages display recovery phrases.
+
+- **Add a screen** by adding a template plus a handler returning `frag(&T)`.
+  Templates are compile-time checked, so a bad variable fails `cargo build`.
+- **Validation errors re-render their own screen** with a message, returned
+  with a 4xx status; htmx is configured to swap 4xx bodies. Keep the status
+  honest rather than returning 200 to make the swap work.
+- **Every state-changing route checks `state.authorized(&headers)`.** htmx
+  sends the session token via `hx-headers` on the root element; a new route
+  that forgets the check is reachable by any local process.
+- **Assets are vendored and served from the binary** (`/htmx.js`, `/app.css`).
+  Never reference a CDN: it would put a third party in front of a phrase.
+  See `crates/connect/assets/VENDORED.md` for versions and digests.
+
 ## Conventions
 
 - Edition 2024, toolchain pinned to 1.94.0 in `rust-toolchain.toml`; CI pins

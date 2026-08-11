@@ -1,0 +1,13 @@
+{% if let Some(message) = error %}
+<div class="card err">{{ message }}</div>
+{% endif %}
+
+<form hx-post="/import">
+  <label for="phrase">Recovery phrase (12 or 24 words, separated by spaces)</label>
+  <textarea id="phrase" name="phrase" autocomplete="off" autocapitalize="off"
+            autocorrect="off" spellcheck="false"></textarea>
+  <p class="hint">Capitalisation and extra spacing are fine.</p>
+  <button class="primary" type="submit"><span>Import wallet</span></button>
+</form>
+
+<button hx-post="/cancel">Cancel</button>

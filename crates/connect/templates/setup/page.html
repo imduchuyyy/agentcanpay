@@ -1,0 +1,29 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="referrer" content="no-referrer" />
+<title>agentcanpay — set up your wallet</title>
+<link rel="stylesheet" href="/app.css" />
+<script src="/htmx.js"></script>
+
+<h1>Set up your agent's wallet</h1>
+<p class="sub">This page runs only on your computer. Nothing is sent over the
+network, and the AI agent that started it cannot see what you do here.</p>
+
+{# Every request carries the session token, so no screen has to thread it
+   through a hidden field. 4xx bodies are swapped in too: validation errors
+   are rendered fragments, not dead ends. #}
+<div id="app"
+     hx-headers='{"X-Session-Token": "{{ token }}"}'
+     hx-target="#app"
+     hx-swap="innerHTML">
+{% include "setup/choose.html" %}
+</div>
+
+<script>
+  htmx.config.responseHandling = [
+    { code: "204", swap: false },
+    { code: "[23]..", swap: true },
+    { code: "4..", swap: true },
+    { code: "5..", swap: false, error: true },
+  ];
+</script>
