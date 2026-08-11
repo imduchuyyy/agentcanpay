@@ -5,8 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 `agentcanpay` — a Rust CLI that lets an AI agent hold and use a crypto wallet.
-Commands: `create` (generate a new recovery phrase), `import` (adopt an
-existing one), `address` (print the address).
+Commands: `create` (set up the wallet), `address` (print the address).
+
+**The CLI is for the agent; the browser page is for the human.** The agent
+cannot know whether the user wants a new wallet or an existing one, so it
+never has to: it calls `create`, and the user chooses new-or-import, and the
+phrase length, in the page. Any decision only a human can make belongs in the
+page, never as a CLI flag or a second subcommand. This is why there is no
+`import` command and no `--words`.
 
 ## Commands
 
@@ -62,6 +68,9 @@ unit. `acp-connect::setup` is what `create` runs.
   parameter — keep it that way, so printing one requires adding a code path
   rather than passing an argument. It is likewise never a CLI argument,
   because argv is world-readable via `ps`.
+- **`create` is the single entry point for wallet setup.** Adding a flag or
+  subcommand that presets the user's choice puts the agent back in the
+  position of guessing.
 - **Secrets are written 0600 before content reaches the file**, via
   `store::write_private` (temp file + atomic rename). Do not write secrets
   with plain `fs::write`.

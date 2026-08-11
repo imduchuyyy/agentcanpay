@@ -13,11 +13,9 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Create a wallet with a newly generated recovery phrase.
+    /// Set up the wallet. Opens a page where the user creates a new
+    /// recovery phrase or imports one they already have.
     Create(CreateArgs),
-
-    /// Import a wallet from an existing recovery phrase on stdin.
-    Import(ImportArgs),
 
     /// Print the wallet address.
     Address(AddressArgs),
@@ -40,31 +38,13 @@ impl From<BackendArg> for acp_keystore::Backend {
     }
 }
 
-/// Only the two common BIP-39 lengths are offered; the intermediate sizes
-/// are legal but nothing else in the ecosystem uses them.
-#[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
-pub enum WordsArg {
-    #[value(name = "12")]
-    Twelve,
-    #[value(name = "24")]
-    TwentyFour,
-}
-
-impl From<WordsArg> for acp_wallet::WordCount {
-    fn from(w: WordsArg) -> Self {
-        match w {
-            WordsArg::Twelve => Self::Twelve,
-            WordsArg::TwentyFour => Self::TwentyFour,
-        }
-    }
-}
-
+/// Only options an agent can actually reason about belong here.
+///
+/// Whether this becomes a new wallet or an imported one, and how long the
+/// phrase is, are the user's choices and are made in the browser: the agent
+/// calling this has no basis for either, and must not have to guess.
 #[derive(Args)]
 pub struct CreateArgs {
-    /// Length of the generated recovery phrase.
-    #[arg(long, value_enum, default_value_t = WordsArg::TwentyFour)]
-    pub words: WordsArg,
-
     /// Replace an existing wallet.
     #[arg(long)]
     pub force: bool,
@@ -80,17 +60,6 @@ pub struct CreateArgs {
     /// Seconds to wait for the user to finish in the browser.
     #[arg(long, default_value_t = 600)]
     pub timeout: u64,
-}
-
-#[derive(Args)]
-pub struct ImportArgs {
-    /// Replace an existing wallet.
-    #[arg(long)]
-    pub force: bool,
-
-    /// Where to keep the recovery phrase.
-    #[arg(long, value_enum, default_value_t = BackendArg::Keychain)]
-    pub keystore: BackendArg,
 }
 
 #[derive(Args)]

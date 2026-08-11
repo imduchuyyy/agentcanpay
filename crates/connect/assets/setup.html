@@ -53,6 +53,15 @@ network, and the AI agent that started it cannot see what you do here.</p>
   <button id="b-import">I already have a recovery phrase</button>
 </section>
 
+<section id="s-length" class="screen">
+  <p>How long should your recovery phrase be?</p>
+  <button class="primary" id="b-24"><span>24 words (recommended)</span></button>
+  <button id="b-12">12 words</button>
+  <p class="hint">24 words is harder to write down but harder to guess.
+    Both are standard and work in any wallet app.</p>
+  <div><button id="b-back-0">Back</button></div>
+</section>
+
 <section id="s-show" class="screen">
   <div class="card warn">
     <strong>Write these words down, in order, on paper.</strong>
@@ -127,9 +136,9 @@ network, and the AI agent that started it cannot see what you do here.</p>
     return data;
   }
 
-  async function newWallet() {
+  async function newWallet(wordCount) {
     try {
-      const { words, challenge } = await post("/generate", {});
+      const { words, challenge } = await post("/generate", { words: wordCount });
       challengeIdx = challenge;
       const list = $("word-list");
       list.innerHTML = "";
@@ -193,7 +202,10 @@ network, and the AI agent that started it cannot see what you do here.</p>
     show("s-choose");
   }
 
-  $("b-new").onclick = newWallet;
+  $("b-new").onclick = () => show("s-length");
+  $("b-24").onclick = () => newWallet(24);
+  $("b-12").onclick = () => newWallet(12);
+  $("b-back-0").onclick = () => show("s-choose");
   $("b-import").onclick = () => show("s-import");
   $("b-saved").onclick = toVerify;
   $("b-show-again").onclick = () => show("s-show");

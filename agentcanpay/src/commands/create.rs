@@ -30,7 +30,6 @@ pub async fn run(args: &CreateArgs, out: &Output) -> Result<(), CommandError> {
     );
 
     let SetupOutcome { phrase, kind } = acp_connect::setup::run(
-        args.words.into(),
         ConnectOptions {
             timeout: Duration::from_secs(args.timeout),
             open_browser: !args.print_url,

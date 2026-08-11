@@ -13,7 +13,6 @@ async fn main() -> std::process::ExitCode {
 
     let result = match &cli.command {
         Command::Create(args) => commands::create::run(args, &out).await,
-        Command::Import(args) => commands::import::run(args, &out),
         Command::Address(args) => commands::address::run(args, &out),
     };
 

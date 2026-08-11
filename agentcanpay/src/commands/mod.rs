@@ -1,6 +1,5 @@
 pub mod address;
 pub mod create;
-pub mod import;
 pub mod store;
 
 use std::process::ExitCode;
@@ -21,12 +20,6 @@ pub enum CommandError {
 
     #[error("wallet has no account for chain `{0}`")]
     NoAccountForChain(String),
-
-    #[error("no recovery phrase on stdin")]
-    EmptyPhrase,
-
-    #[error("could not read the recovery phrase: {0}")]
-    ReadPhrase(#[source] std::io::Error),
 }
 
 impl CommandError {
@@ -46,7 +39,6 @@ impl CommandError {
             ) => "invalid_phrase",
             Self::Wallet(_) => "wallet",
             Self::NoAccountForChain(_) => "no_account_for_chain",
-            Self::EmptyPhrase | Self::ReadPhrase(_) => "phrase_input",
         }
     }
 
@@ -60,9 +52,7 @@ impl CommandError {
             )
             | Self::Wallet(
                 acp_wallet::WalletError::Mnemonic | acp_wallet::WalletError::WordCount(_),
-            )
-            | Self::EmptyPhrase
-            | Self::ReadPhrase(_) => 3,
+            ) => 3,
             Self::Keystore(
                 acp_keystore::KeystoreError::SecretMissing
                 | acp_keystore::KeystoreError::NoCredentialStore,

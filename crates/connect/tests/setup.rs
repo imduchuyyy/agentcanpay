@@ -6,7 +6,6 @@ use acp_connect::{
     ConnectOptions,
     setup::{SetupKind, SetupOutcome},
 };
-use acp_wallet::WordCount;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, StatusCode};
@@ -57,12 +56,11 @@ struct Session {
     result: tokio::task::JoinHandle<Result<SetupOutcome, acp_connect::ConnectError>>,
 }
 
-async fn start(words: WordCount) -> Session {
+async fn start() -> Session {
     let (ready_tx, ready_rx) = oneshot::channel();
 
     let result = tokio::spawn(async move {
         acp_connect::setup::run(
-            words,
             ConnectOptions {
                 timeout: Duration::from_secs(10),
                 open_browser: false,
@@ -94,13 +92,13 @@ async fn start(words: WordCount) -> Session {
 
 #[tokio::test]
 async fn generating_and_confirming_stores_the_shown_phrase() {
-    let s = start(WordCount::TwentyFour).await;
+    let s = start().await;
 
     let gen_res = send(
         &s.url,
         "POST",
         "/generate",
-        Some(serde_json::json!({ "token": s.token })),
+        Some(serde_json::json!({ "token": s.token, "words": 24 })),
     )
     .await;
     assert_eq!(gen_res.status, StatusCode::OK);
@@ -163,13 +161,13 @@ async fn generating_and_confirming_stores_the_shown_phrase() {
 
 #[tokio::test]
 async fn a_wrong_confirmation_leaves_the_session_open_to_retry() {
-    let s = start(WordCount::TwentyFour).await;
+    let s = start().await;
 
     let gen_res = send(
         &s.url,
         "POST",
         "/generate",
-        Some(serde_json::json!({ "token": s.token })),
+        Some(serde_json::json!({ "token": s.token, "words": 24 })),
     )
     .await;
     let v: serde_json::Value = serde_json::from_str(&gen_res.body).unwrap();
@@ -218,7 +216,7 @@ async fn a_wrong_confirmation_leaves_the_session_open_to_retry() {
 
 #[tokio::test]
 async fn importing_a_phrase_completes_setup() {
-    let s = start(WordCount::TwentyFour).await;
+    let s = start().await;
     let known = "test test test test test test test test test test test junk";
 
     let res = send(
@@ -239,7 +237,7 @@ async fn importing_a_phrase_completes_setup() {
 
 #[tokio::test]
 async fn an_invalid_import_is_reported_without_ending_the_session() {
-    let s = start(WordCount::TwentyFour).await;
+    let s = start().await;
 
     let bad = send(
         &s.url,
@@ -265,10 +263,13 @@ async fn an_invalid_import_is_reported_without_ending_the_session() {
 
 #[tokio::test]
 async fn another_local_process_cannot_drive_the_flow_without_the_token() {
-    let s = start(WordCount::TwentyFour).await;
+    let s = start().await;
 
     for (path, body) in [
-        ("/generate", serde_json::json!({ "token": "guess" })),
+        (
+            "/generate",
+            serde_json::json!({ "token": "guess", "words": 24 }),
+        ),
         (
             "/import",
             serde_json::json!({ "token": "guess", "phrase": "x" }),

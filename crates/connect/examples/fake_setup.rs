@@ -74,7 +74,7 @@ async fn main() {
         &authority,
         "POST",
         "/generate",
-        Some(serde_json::json!({ "token": token })),
+        Some(serde_json::json!({ "token": token, "words": 24 })),
     )
     .await;
     assert_eq!(status, 200, "generate failed: {body}");

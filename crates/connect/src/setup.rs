@@ -52,7 +52,6 @@ impl std::fmt::Debug for SetupOutcome {
 
 struct AppState {
     token: String,
-    words: WordCount,
     /// Generated but not yet confirmed. Held here rather than in the page
     /// so a reload cannot silently swap in a phrase the user never saw.
     pending: Mutex<Option<Zeroizing<String>>>,
@@ -67,9 +66,12 @@ impl AppState {
     }
 }
 
+/// Phrase length is chosen here rather than on the command line: the agent
+/// invoking the CLI has no basis for the choice, and it is the user's.
 #[derive(Deserialize)]
-struct TokenReq {
+struct GenerateReq {
     token: String,
+    words: usize,
 }
 
 #[derive(Serialize)]
@@ -108,10 +110,7 @@ struct AddressRes {
 }
 
 async fn index(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let cfg = serde_json::json!({
-        "token": state.token,
-        "wordCount": state.words.words(),
-    });
+    let cfg = serde_json::json!({ "token": state.token });
     no_store(Html(PAGE.replace("__CFG__", &cfg.to_string())))
 }
 
@@ -121,11 +120,17 @@ async fn index(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 /// the phrase they are looking at is always the one that will be saved.
 async fn generate(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<TokenReq>,
+    Json(req): Json<GenerateReq>,
 ) -> Result<impl IntoResponse, ApiError> {
     check_token(&state.token, &req.token)?;
 
-    let phrase = generate_phrase(state.words)
+    let words = match req.words {
+        12 => WordCount::Twelve,
+        24 => WordCount::TwentyFour,
+        n => return Err(ApiError::bad_request(format!("unsupported length {n}"))),
+    };
+
+    let phrase = generate_phrase(words)
         .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "could not generate"))?;
     let words: Vec<String> = phrase.split(' ').map(str::to_owned).collect();
     let challenge = challenge_indices(words.len(), CHALLENGE_WORDS);
@@ -216,18 +221,16 @@ fn random_below(n: usize) -> usize {
 }
 
 /// Serves the setup page on loopback and waits for the user to finish.
-pub async fn run<F>(
-    words: WordCount,
-    opts: ConnectOptions,
-    on_ready: F,
-) -> Result<SetupOutcome, ConnectError>
+///
+/// Takes no choice of its own: whether this becomes a new wallet or an
+/// imported one, and how long the phrase is, are all decided in the page.
+pub async fn run<F>(opts: ConnectOptions, on_ready: F) -> Result<SetupOutcome, ConnectError>
 where
     F: FnOnce(&str),
 {
     let (tx, rx) = oneshot::channel();
     let state = Arc::new(AppState {
         token: session_token(),
-        words,
         pending: Mutex::new(None),
         tx: Mutex::new(Some(tx)),
     });
@@ -256,7 +259,6 @@ mod tests {
         let (tx, rx) = oneshot::channel();
         let s = Arc::new(AppState {
             token: "tok".into(),
-            words: WordCount::TwentyFour,
             pending: Mutex::new(None),
             tx: Mutex::new(Some(tx)),
         });
@@ -290,8 +292,9 @@ mod tests {
         let (st, rx) = state();
         generate(
             State(st.clone()),
-            Json(TokenReq {
+            Json(GenerateReq {
                 token: "tok".into(),
+                words: 24,
             }),
         )
         .await
@@ -318,8 +321,9 @@ mod tests {
         let (st, mut rx) = state();
         generate(
             State(st.clone()),
-            Json(TokenReq {
+            Json(GenerateReq {
                 token: "tok".into(),
+                words: 24,
             }),
         )
         .await
@@ -358,8 +362,9 @@ mod tests {
         let (st, _rx) = state();
         generate(
             State(st.clone()),
-            Json(TokenReq {
+            Json(GenerateReq {
                 token: "tok".into(),
+                words: 24,
             }),
         )
         .await
@@ -434,8 +439,9 @@ mod tests {
         assert!(
             generate(
                 State(st.clone()),
-                Json(TokenReq {
-                    token: "wrong".into()
+                Json(GenerateReq {
+                    token: "wrong".into(),
+                    words: 24,
                 })
             )
             .await
