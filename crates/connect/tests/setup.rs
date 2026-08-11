@@ -114,14 +114,6 @@ fn words_from(html: &str) -> Vec<String> {
         .collect()
 }
 
-/// Reads the challenge positions from the rendered input names.
-fn positions_from(html: &str) -> Vec<usize> {
-    html.split(r#"name="w"#)
-        .skip(1)
-        .map(|c| c.split('"').next().unwrap().parse().unwrap())
-        .collect()
-}
-
 async fn generate(s: &Session, words: u32) -> Res {
     send(
         &s.url,
@@ -134,7 +126,7 @@ async fn generate(s: &Session, words: u32) -> Res {
 }
 
 #[tokio::test]
-async fn generating_and_confirming_stores_the_shown_phrase() {
+async fn generating_and_saving_stores_the_shown_phrase() {
     let s = start().await;
 
     let shown = generate(&s, 24).await;
@@ -154,22 +146,32 @@ async fn generating_and_confirming_stores_the_shown_phrase() {
     let joined = words.join(" ");
     assert!(!s.page.contains(&joined), "initial page leaked the phrase");
 
-    let verify = send(&s.url, "GET", "/verify", Some(&s.token), None).await;
-    assert_eq!(verify.status, StatusCode::OK);
-    let positions = positions_from(&verify.body);
-    assert_eq!(positions.len(), 3);
-
-    let form = positions
-        .iter()
-        .map(|i| format!("w{i}={}", words[*i]))
-        .collect::<Vec<_>>()
-        .join("&");
-    let done = send(&s.url, "POST", "/confirm", Some(&s.token), Some(&form)).await;
-    assert_eq!(done.status, StatusCode::OK, "confirm: {}", done.body);
+    let done = send(&s.url, "POST", "/save", Some(&s.token), None).await;
+    assert_eq!(done.status, StatusCode::OK, "save: {}", done.body);
 
     let outcome = s.result.await.unwrap().unwrap();
     assert_eq!(outcome.kind, SetupKind::Generated);
     assert_eq!(*outcome.phrase, joined);
+}
+
+/// The copy button reads the words back out of the rendered list, so the
+/// phrase must appear in the fragment exactly once — a hidden input or
+/// data attribute holding a second copy would be a second place to leak it.
+#[tokio::test]
+async fn the_phrase_is_offered_for_copying_without_a_duplicate_in_the_dom() {
+    let s = start().await;
+    let shown = generate(&s, 24).await;
+
+    assert!(
+        shown.body.contains("data-copy"),
+        "no copy button in the phrase screen"
+    );
+
+    let joined = words_from(&shown.body).join(" ");
+    assert!(
+        !shown.body.contains(&joined),
+        "phrase appears as a contiguous string, i.e. duplicated in the DOM"
+    );
 }
 
 /// Re-rendering the phrase must show the same words, not mint new ones —
@@ -183,60 +185,6 @@ async fn showing_the_phrase_again_does_not_regenerate_it() {
     assert_eq!(again.status, StatusCode::OK);
 
     assert_eq!(words_from(&again.body), first);
-}
-
-#[tokio::test]
-async fn a_wrong_confirmation_re_renders_the_form_and_allows_retry() {
-    let s = start().await;
-    let words = words_from(&generate(&s, 24).await.body);
-    let positions = positions_from(
-        &send(&s.url, "GET", "/verify", Some(&s.token), None)
-            .await
-            .body,
-    );
-
-    let wrong = positions
-        .iter()
-        .map(|i| format!("w{i}=wrong"))
-        .collect::<Vec<_>>()
-        .join("&");
-    let bad = send(&s.url, "POST", "/confirm", Some(&s.token), Some(&wrong)).await;
-
-    assert_eq!(bad.status, StatusCode::BAD_REQUEST);
-    // htmx swaps 4xx bodies, so the response must be the form again with a
-    // message, not a bare error.
-    assert!(bad.body.contains("do not match"), "body: {}", bad.body);
-    assert_eq!(
-        positions_from(&bad.body),
-        positions,
-        "form was not re-rendered"
-    );
-
-    let right = positions
-        .iter()
-        .map(|i| format!("w{i}={}", words[*i]))
-        .collect::<Vec<_>>()
-        .join("&");
-    let ok = send(&s.url, "POST", "/confirm", Some(&s.token), Some(&right)).await;
-    assert_eq!(ok.status, StatusCode::OK);
-
-    assert_eq!(s.result.await.unwrap().unwrap().kind, SetupKind::Generated);
-}
-
-/// Answering only some positions must not pass by vacuous truth.
-#[tokio::test]
-async fn a_partial_answer_set_is_rejected() {
-    let s = start().await;
-    let words = words_from(&generate(&s, 24).await.body);
-    let positions = positions_from(
-        &send(&s.url, "GET", "/verify", Some(&s.token), None)
-            .await
-            .body,
-    );
-
-    let one = format!("w{}={}", positions[0], words[positions[0]]);
-    let res = send(&s.url, "POST", "/confirm", Some(&s.token), Some(&one)).await;
-    assert_eq!(res.status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -295,9 +243,8 @@ async fn another_local_process_cannot_drive_the_flow_without_the_token() {
     for (method, path, form) in [
         ("POST", "/new?words=24", None),
         ("GET", "/phrase", None),
-        ("GET", "/verify", None),
         ("POST", "/import", Some("phrase=x")),
-        ("POST", "/confirm", Some("w0=x")),
+        ("POST", "/save", None),
         ("POST", "/cancel", None),
     ] {
         let guessed = send(&s.url, method, path, Some("not-the-token"), form).await;

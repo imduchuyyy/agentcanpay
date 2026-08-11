@@ -1,8 +1,8 @@
 <div class="card warn">
-  <strong>Write these words down, in order, on paper.</strong>
-  <p class="hint">They are the only way to recover this wallet. Anyone who has
-  them can spend from it. Do not screenshot them, and do not paste them into a
-  chat with the AI agent.</p>
+  <strong>Save these words, in order, somewhere only you can read.</strong>
+  <p class="hint">They are the only way to recover this wallet, and anyone who
+  has them can spend from it. Do not paste them into a chat with the AI
+  agent.</p>
 </div>
 
 <ol class="words">
@@ -11,5 +11,15 @@
 {% endfor %}
 </ol>
 
-<button class="primary" hx-get="/verify"><span>I have written them down</span></button>
-<button hx-post="/cancel">Cancel</button>
+<p>
+  <button type="button" data-copy>Copy to clipboard</button>
+  <span class="hint" id="copy-note"></span>
+</p>
+<p class="hint">Copying puts the phrase on your system clipboard, where other
+programs on this computer — including the AI agent — can read it until you
+copy something else.</p>
+
+<p>
+  <button class="primary" hx-post="/save"><span>I have saved it — continue</span></button>
+  <button hx-post="/cancel">Cancel</button>
+</p>

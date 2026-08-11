@@ -59,13 +59,6 @@ fn words_from(html: &str) -> Vec<String> {
         .collect()
 }
 
-fn positions_from(html: &str) -> Vec<usize> {
-    html.split(r#"name="w"#)
-        .skip(1)
-        .map(|c| c.split('"').next().unwrap().parse().unwrap())
-        .collect()
-}
-
 #[tokio::main]
 async fn main() {
     let mut args = std::env::args().skip(1);
@@ -98,18 +91,9 @@ async fn main() {
 
     let (status, body) = send(&authority, "POST", "/new?words=24", Some(&token), None).await;
     assert_eq!(status, 200, "generate failed: {body}");
-    let words = words_from(&body);
+    println!("phrase has {} words", words_from(&body).len());
 
-    let (status, body) = send(&authority, "GET", "/verify", Some(&token), None).await;
-    assert_eq!(status, 200, "verify failed: {body}");
-
-    let form = positions_from(&body)
-        .iter()
-        .map(|i| format!("w{i}={}", words[*i]))
-        .collect::<Vec<_>>()
-        .join("&");
-
-    let (status, body) = send(&authority, "POST", "/confirm", Some(&token), Some(form)).await;
-    assert_eq!(status, 200, "confirm failed: {body}");
+    let (status, body) = send(&authority, "POST", "/save", Some(&token), None).await;
+    assert_eq!(status, 200, "save failed: {body}");
     println!("created");
 }
