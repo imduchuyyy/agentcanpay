@@ -72,6 +72,14 @@ pub struct CreateArgs {
     /// Where to keep the recovery phrase.
     #[arg(long, value_enum, default_value_t = BackendArg::Keychain)]
     pub keystore: BackendArg,
+
+    /// Print the setup URL instead of opening a browser, for headless hosts.
+    #[arg(long)]
+    pub print_url: bool,
+
+    /// Seconds to wait for the user to finish in the browser.
+    #[arg(long, default_value_t = 600)]
+    pub timeout: u64,
 }
 
 #[derive(Args)]

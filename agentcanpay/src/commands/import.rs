@@ -23,14 +23,7 @@ pub fn run(args: &ImportArgs, out: &Output) -> Result<(), CommandError> {
         args.force,
     )?;
 
-    // The phrase is never echoed back: the user already has it, and
-    // repeating it only widens where it can be captured.
-    out.secret_record(
-        &wallet.accounts,
-        None,
-        args.keystore.into(),
-        Source::Imported,
-    );
+    out.wallet(&wallet.accounts, args.keystore.into(), Source::Imported);
     Ok(())
 }
 

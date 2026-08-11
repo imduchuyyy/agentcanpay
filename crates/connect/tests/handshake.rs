@@ -53,16 +53,18 @@ fn token_from_page(page: &str) -> String {
 struct Session {
     url: String,
     token: String,
-    result: tokio::task::JoinHandle<Result<acp_connect::Handshake, acp_connect::ConnectError>>,
+    result: tokio::task::JoinHandle<
+        Result<acp_connect::authorize::Handshake, acp_connect::ConnectError>,
+    >,
 }
 
 async fn start(index: u32) -> Session {
     let (ready_tx, ready_rx) = oneshot::channel();
 
     let result = tokio::spawn(async move {
-        acp_connect::run(
+        acp_connect::authorize::run(
+            index,
             ConnectOptions {
-                index,
                 timeout: Duration::from_secs(10),
                 open_browser: false,
             },

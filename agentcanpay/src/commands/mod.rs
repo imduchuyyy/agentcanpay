@@ -14,6 +14,9 @@ pub enum CommandError {
     Keystore(#[from] acp_keystore::KeystoreError),
 
     #[error(transparent)]
+    Connect(#[from] acp_connect::ConnectError),
+
+    #[error(transparent)]
     Wallet(#[from] acp_wallet::WalletError),
 
     #[error("wallet has no account for chain `{0}`")]
@@ -34,6 +37,10 @@ impl CommandError {
             Self::Keystore(acp_keystore::KeystoreError::SecretMissing) => "secret_missing",
             Self::Keystore(acp_keystore::KeystoreError::NoCredentialStore) => "no_credential_store",
             Self::Keystore(_) => "keystore",
+            Self::Connect(acp_connect::ConnectError::Timeout) => "timeout",
+            Self::Connect(acp_connect::ConnectError::Cancelled(_)) => "cancelled",
+            Self::Connect(acp_connect::ConnectError::Browser) => "needs_browser",
+            Self::Connect(_) => "connect",
             Self::Wallet(
                 acp_wallet::WalletError::Mnemonic | acp_wallet::WalletError::WordCount(_),
             ) => "invalid_phrase",
@@ -46,7 +53,12 @@ impl CommandError {
     pub fn exit_code(&self) -> ExitCode {
         let code: u8 = match self {
             Self::Keystore(acp_keystore::KeystoreError::NoWallet) => 2,
-            Self::Wallet(
+            // 3 means "the user did not supply a usable phrase" — whether
+            // they cancelled, ran out of time, or typed it wrong.
+            Self::Connect(
+                acp_connect::ConnectError::Timeout | acp_connect::ConnectError::Cancelled(_),
+            )
+            | Self::Wallet(
                 acp_wallet::WalletError::Mnemonic | acp_wallet::WalletError::WordCount(_),
             )
             | Self::EmptyPhrase

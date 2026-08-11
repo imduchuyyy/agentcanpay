@@ -6,6 +6,7 @@ version = 4
 name = "acp-connect"
 version = "0.1.0"
 dependencies = [
+ "acp-wallet",
  "alloy",
  "axum",
  "bytes",
@@ -63,6 +64,7 @@ dependencies = [
 name = "agentcanpay"
 version = "0.1.0"
 dependencies = [
+ "acp-connect",
  "acp-keystore",
  "acp-wallet",
  "clap",
@@ -70,6 +72,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
  "time",
+ "tokio",
  "zeroize",
 ]
 

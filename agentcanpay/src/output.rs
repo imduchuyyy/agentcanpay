@@ -31,46 +31,27 @@ impl Output {
         }
     }
 
-    /// Reports a newly stored wallet, optionally including the phrase.
+    /// Reports a newly stored wallet.
     ///
-    /// In plain mode stdout stays a bare address so `create` pipes exactly
-    /// like `address`, and the phrase goes to stderr where a human reads it
-    /// but `$(...)` does not capture it.
-    pub fn secret_record(
-        &self,
-        accounts: &[DerivedAccount],
-        phrase: Option<&str>,
-        backend: Backend,
-        source: Source,
-    ) {
+    /// Takes no phrase, by construction. The recovery phrase is shown to the
+    /// user in the browser and nowhere else; giving this function a way to
+    /// accept one would put it a single call site away from an agent's log.
+    pub fn wallet(&self, accounts: &[DerivedAccount], backend: Backend, source: Source) {
         let Some(primary) = accounts.first() else {
             return;
         };
 
         if self.json {
-            let mut obj = serde_json::json!({
-                "address": primary.address,
-                "chain": primary.chain,
-                "backend": backend.as_str(),
-                "source": source.as_str(),
-            });
-            if let Some(p) = phrase {
-                obj["phrase"] = serde_json::Value::String(p.to_owned());
-            }
-            println!("{obj}");
-            return;
-        }
-
-        if let Some(p) = phrase {
-            eprintln!(
-                "\n  Write down this recovery phrase and store it offline.\n  \
-                 It is the only copy. Anyone who has it controls this wallet,\n  \
-                 and it will not be shown again.\n"
+            println!(
+                "{}",
+                serde_json::json!({
+                    "address": primary.address,
+                    "chain": primary.chain,
+                    "backend": backend.as_str(),
+                    "source": source.as_str(),
+                })
             );
-            for (i, line) in phrase_lines(p).iter().enumerate() {
-                eprintln!("    {:>2}. {line}", i * 4 + 1);
-            }
-            eprintln!();
+            return;
         }
 
         eprintln!(
@@ -90,36 +71,5 @@ impl Output {
         } else {
             eprintln!("error: {err}");
         }
-    }
-}
-
-/// Groups the phrase four words to a line so it can be transcribed by hand
-/// without losing your place.
-fn phrase_lines(phrase: &str) -> Vec<String> {
-    phrase
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .chunks(4)
-        .map(|c| c.join(" "))
-        .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn groups_a_24_word_phrase_into_six_lines() {
-        let phrase = "abandon ".repeat(23) + "art";
-        let lines = phrase_lines(&phrase);
-        assert_eq!(lines.len(), 6);
-        assert_eq!(lines[0].split(' ').count(), 4);
-        assert!(lines[5].ends_with("art"));
-    }
-
-    #[test]
-    fn groups_a_12_word_phrase_into_three_lines() {
-        let phrase = "abandon ".repeat(11) + "about";
-        assert_eq!(phrase_lines(&phrase).len(), 3);
     }
 }

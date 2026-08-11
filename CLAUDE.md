@@ -35,11 +35,12 @@ never touch a real wallet at `~/.agentcanpay`.
 | `agentcanpay` | clap parsing, output rendering, exit codes |
 | `crates/wallet` (`acp-wallet`) | phrase generation, BIP-39/44 derivation, `ChainAccount` seam |
 | `crates/keystore` (`acp-keystore`) | secret backends, wallet metadata, atomic writes |
-| `crates/connect` (`acp-connect`) | browser EIP-712 handshake — **not currently wired into the CLI** |
+| `crates/connect` (`acp-connect`) | loopback browser flows: `setup` (used by `create`) and `authorize` |
 
-`acp-connect` and `acp-wallet::kdf` implement an alternative flow where the
-wallet is derived from an external wallet's signature. They are complete and
-tested but nothing in the CLI calls them; keep or delete as a unit.
+`acp-connect::authorize` and `acp-wallet::kdf` implement an alternative flow
+where the wallet is derived from an external wallet's signature. They are
+complete and tested but nothing in the CLI calls them; keep or delete as a
+unit. `acp-connect::setup` is what `create` runs.
 
 ## Invariants worth knowing before editing
 
@@ -55,9 +56,12 @@ tested but nothing in the CLI calls them; keep or delete as a unit.
   and nothing else; human text goes to stderr. Under `--json` stdout is a
   single JSON object. Exit codes: 2 no wallet, 3 bad/absent phrase input,
   4 keystore unavailable, 5 wallet exists.
-- **The phrase is only ever printed by `create`.** `import` does not echo it,
-  and no command reads it back out. It is not accepted as a CLI argument
-  anywhere, because argv is world-readable via `ps`.
+- **The recovery phrase must never reach stdout or stderr.** The caller is an
+  AI agent that reads and logs this process's output, so the phrase is shown
+  only in the browser. `Output::wallet` deliberately takes no phrase
+  parameter — keep it that way, so printing one requires adding a code path
+  rather than passing an argument. It is likewise never a CLI argument,
+  because argv is world-readable via `ps`.
 - **Secrets are written 0600 before content reaches the file**, via
   `store::write_private` (temp file + atomic rename). Do not write secrets
   with plain `fs::write`.
@@ -79,5 +83,13 @@ tested but nothing in the CLI calls them; keep or delete as a unit.
 
 ## Testing without a browser
 
-`cargo run -p acp-connect --example fake_browser -- <url>` completes a connect
-handshake with a throwaway key, for exercising the `acp-connect` flow.
+Both browser flows have headless drivers, so `create` can be exercised
+end-to-end without a wallet extension:
+
+```
+cargo run -p acp-connect --example fake_setup   -- <url> new
+cargo run -p acp-connect --example fake_setup   -- <url> import "<phrase>"
+cargo run -p acp-connect --example fake_browser -- <url>   # authorize flow
+```
+
+Start the CLI with `--print-url` to get the URL to pass them.
