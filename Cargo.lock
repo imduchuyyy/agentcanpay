@@ -40,6 +40,7 @@ name = "acp-wallet"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "getrandom 0.4.3",
  "hex",
  "hkdf",
  "sha2",
@@ -62,7 +63,6 @@ dependencies = [
 name = "agentcanpay"
 version = "0.1.0"
 dependencies = [
- "acp-connect",
  "acp-keystore",
  "acp-wallet",
  "clap",
@@ -70,7 +70,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
  "time",
- "tokio",
+ "zeroize",
 ]
 
 [[package]]

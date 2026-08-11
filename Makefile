@@ -19,3 +19,6 @@ test:
 	cargo test --workspace --all-targets
 
 verify: fmt-check lint test
+
+run:
+	cargo run --bin agentcanpay

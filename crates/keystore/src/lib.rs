@@ -3,7 +3,7 @@ pub mod metadata;
 pub mod store;
 
 pub use error::KeystoreError;
-pub use metadata::{Account, Backend, Kdf, METADATA_VERSION, WalletMetadata};
+pub use metadata::{Account, Backend, Kdf, METADATA_VERSION, Source, WalletMetadata};
 pub use store::{FileStore, KeychainStore, SecretStore, store_for};
 
 use std::path::{Path, PathBuf};
@@ -102,11 +102,9 @@ mod tests {
             version: METADATA_VERSION,
             id: "0xabc".into(),
             backend,
-            authorized_by: "0xdef".into(),
-            kdf: Kdf {
-                alg: "hkdf-sha256-v1".into(),
-                index: 0,
-            },
+            source: Source::Generated,
+            authorized_by: None,
+            kdf: None,
             accounts: vec![Account {
                 chain: "evm".into(),
                 path: "m/44'/60'/0'/0/0".into(),

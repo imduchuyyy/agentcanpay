@@ -6,13 +6,13 @@ use clap::Parser;
 use cli::{Cli, Command};
 use output::Output;
 
-#[tokio::main]
-async fn main() -> std::process::ExitCode {
+fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
     let out = Output::new(cli.json);
 
     let result = match &cli.command {
-        Command::Create(args) => commands::create::run(args, &out).await,
+        Command::Create(args) => commands::create::run(args, &out),
+        Command::Import(args) => commands::import::run(args, &out),
         Command::Address(args) => commands::address::run(args, &out),
     };
 

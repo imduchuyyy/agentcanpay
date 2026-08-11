@@ -6,7 +6,6 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-acp-connect.workspace = true
 acp-keystore.workspace = true
 acp-wallet.workspace = true
 clap.workspace = true
@@ -14,7 +13,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 time.workspace = true
-tokio.workspace = true
+zeroize.workspace = true
 
 [lints]
 workspace = true
