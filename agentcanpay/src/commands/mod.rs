@@ -1,5 +1,6 @@
 pub mod address;
 pub mod create;
+pub mod reveal;
 pub mod store;
 
 use std::process::ExitCode;

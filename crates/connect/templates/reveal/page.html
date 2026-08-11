@@ -1,0 +1,20 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="referrer" content="no-referrer" />
+<title>agentcanpay — recovery phrase</title>
+<link rel="stylesheet" href="/app.css" />
+<script src="/htmx.js"></script>
+
+<h1>Your recovery phrase</h1>
+<p class="sub">This page runs only on your computer. The AI agent that opened
+it cannot see what is shown here.</p>
+<p class="sub">Wallet <code>{{ address }}</code></p>
+
+<div id="app"
+     hx-headers='{"X-Session-Token": "{{ token }}"}'
+     hx-target="#app"
+     hx-swap="innerHTML">
+{% include "reveal/hidden.html" %}
+</div>
+
+{% include "shared/scripts.html" %}

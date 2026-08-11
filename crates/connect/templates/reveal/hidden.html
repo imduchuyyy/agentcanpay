@@ -1,0 +1,17 @@
+<div class="card warn">
+  <strong>Make sure nobody can see your screen.</strong>
+  <p class="hint">Anyone who reads these words can spend from this wallet.
+  Do not screenshot them, and do not paste them into a chat with the AI
+  agent.</p>
+</div>
+
+<ol class="words placeholder">
+{% for _ in 0..word_count %}
+  <li>••••••</li>
+{% endfor %}
+</ol>
+
+<p>
+  <button class="primary" hx-get="/phrase"><span>Show recovery phrase</span></button>
+  <button hx-post="/done">Done</button>
+</p>

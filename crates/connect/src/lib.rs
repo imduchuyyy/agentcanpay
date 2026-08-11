@@ -1,9 +1,14 @@
 pub mod authorize;
 pub mod error;
+pub mod reveal;
 pub mod setup;
 pub mod typed_data;
 
 pub use error::ConnectError;
+
+pub(crate) const HTMX_JS: &str = include_str!("../assets/htmx.min.js");
+pub(crate) const APP_CSS: &str = include_str!("../assets/app.css");
+pub(crate) const TOKEN_HEADER: &str = "x-session-token";
 
 use std::{
     net::{Ipv4Addr, SocketAddr},

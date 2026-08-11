@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 `agentcanpay` — a Rust CLI that lets an AI agent hold and use a crypto wallet.
-Commands: `create` (set up the wallet), `address` (print the address).
+Commands: `create` (set up the wallet), `address` (print the address),
+`reveal` (show the recovery phrase to the user in a browser page).
 
 **The CLI is for the agent; the browser page is for the human.** The agent
 cannot know whether the user wants a new wallet or an existing one, so it
@@ -57,7 +58,11 @@ unit. `acp-connect::setup` is what `create` runs.
   only alongside a `KDF_ALG` version bump.
 - **`address` must never touch the credential store.** It reads `wallet.json`
   only, which is what keeps the common agent path free of unlock prompts.
-  Adding a secret read there would break that.
+  Adding a secret read there would break that. `reveal` is the only command
+  that reads the secret, and so the only one that can prompt.
+- **`reveal` sends the phrase to the page only when the user asks.** The
+  landing page has never seen it, and Hide re-renders without it rather than
+  styling it out of view, so a page left open holds nothing.
 - **stdout is an API.** In plain mode every command prints the bare address
   and nothing else; human text goes to stderr. Under `--json` stdout is a
   single JSON object. Exit codes: 2 no wallet, 3 bad/absent phrase input,

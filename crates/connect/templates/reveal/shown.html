@@ -1,0 +1,23 @@
+<div class="card warn">
+  <strong>Make sure nobody can see your screen.</strong>
+  <p class="hint">Anyone who reads these words can spend from this wallet.
+  Do not screenshot them, and do not paste them into a chat with the AI
+  agent.</p>
+</div>
+
+<ol class="words">
+{% for word in words %}
+  <li>{{ word }}</li>
+{% endfor %}
+</ol>
+
+<p>
+  <button class="primary" hx-get="/hide"><span>Hide</span></button>
+  <button type="button" data-copy>Copy to clipboard</button>
+  <span class="hint" id="copy-note"></span>
+</p>
+<p class="hint">Copying puts the phrase on your system clipboard, where other
+programs on this computer — including the AI agent — can read it until you
+copy something else.</p>
+
+<p><button hx-post="/done">Done</button></p>

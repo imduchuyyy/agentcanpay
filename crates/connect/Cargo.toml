@@ -20,6 +20,7 @@ tokio.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+zeroize.workspace = true
 acp-wallet.workspace = true
 bytes = "1"
 http-body-util = "0.1.4"

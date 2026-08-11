@@ -24,12 +24,10 @@ use serde::Deserialize;
 use tokio::sync::oneshot;
 use zeroize::Zeroizing;
 
-use crate::{ConnectError, ConnectOptions, no_store, serve_and_wait, session_token};
-
-const HTMX_JS: &str = include_str!("../assets/htmx.min.js");
-const APP_CSS: &str = include_str!("../assets/app.css");
-
-const TOKEN_HEADER: &str = "x-session-token";
+use crate::{
+    APP_CSS, ConnectError, ConnectOptions, HTMX_JS, TOKEN_HEADER, no_store, serve_and_wait,
+    session_token,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SetupKind {

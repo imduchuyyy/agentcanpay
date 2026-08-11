@@ -19,6 +19,10 @@ pub enum Command {
 
     /// Print the wallet address.
     Address(AddressArgs),
+
+    /// Show the recovery phrase to the user. Opens a page where they can
+    /// reveal it; the phrase is never printed here.
+    Reveal(RevealArgs),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -59,6 +63,17 @@ pub struct CreateArgs {
 
     /// Seconds to wait for the user to finish in the browser.
     #[arg(long, default_value_t = 600)]
+    pub timeout: u64,
+}
+
+#[derive(Args)]
+pub struct RevealArgs {
+    /// Print the URL instead of opening a browser, for headless hosts.
+    #[arg(long)]
+    pub print_url: bool,
+
+    /// Seconds to wait for the user to finish with the page.
+    #[arg(long, default_value_t = 300)]
     pub timeout: u64,
 }
 

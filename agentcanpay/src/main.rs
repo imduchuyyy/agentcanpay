@@ -14,6 +14,7 @@ async fn main() -> std::process::ExitCode {
     let result = match &cli.command {
         Command::Create(args) => commands::create::run(args, &out).await,
         Command::Address(args) => commands::address::run(args, &out),
+        Command::Reveal(args) => commands::reveal::run(args, &out).await,
     };
 
     match result {
