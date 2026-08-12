@@ -37,6 +37,14 @@ stdout). Run the CLI: `cargo run -p agentcanpay -- <args>`.
 Set `AGENTCANPAY_HOME` to a temp dir when exercising the CLI by hand, so you
 never touch a real wallet at `~/.agentcanpay`.
 
+## SKILL.md is part of the CLI's surface
+
+`SKILL.md` in the repo root is what other people install into their own
+agents to teach them this CLI. **Update it in the same commit that changes
+the surface it documents** — a new command, a new or renamed flag, a changed
+default, a new exit code or error `kind`. It is the one doc that is wrong by
+default: `--help` regenerates itself, `SKILL.md` does not.
+
 ## Releasing
 
 Publishing a GitHub release triggers `.github/workflows/release.yml`, which
