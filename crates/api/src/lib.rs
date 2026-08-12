@@ -13,7 +13,7 @@ pub mod tokens;
 
 pub use chains::{Chain, Currency};
 pub use error::ApiError;
-pub use tokens::{ListKind, Token};
+pub use tokens::{ListKind, NATIVE_TOKEN_ADDRESS, Token};
 
 use std::{collections::BTreeMap, time::Duration};
 

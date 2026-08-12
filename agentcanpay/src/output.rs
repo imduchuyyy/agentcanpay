@@ -77,10 +77,11 @@ impl Output {
                         "chain_id": h.chain_id,
                         "chain": h.chain,
                         "symbol": h.symbol,
-                        "token": h.address,
+                        "token_address": h.address,
                         "amount": h.amount,
                         "usd": h.usd,
                         "verified": h.verified,
+                        "native": h.native,
                     })).collect::<Vec<_>>(),
                 })
             );
@@ -107,24 +108,36 @@ impl Output {
             .max(6);
         let amount_width = shown.iter().map(String::len).max().unwrap_or(6).max(6);
 
+        // The chain id and the full token address are printed, not just the
+        // human names, because they are what a later transfer or swap takes
+        // as input. A truncated address would look usable and not be.
         println!(
-            "{:<chain_width$}  {:<symbol_width$}  {:>amount_width$}  {:>14}",
-            "CHAIN", "TOKEN", "AMOUNT", "USD"
+            "{:>8}  {:<chain_width$}  {:<symbol_width$}  {:>amount_width$}  {:>12}  TOKEN ADDRESS",
+            "CHAIN ID", "CHAIN", "TOKEN", "AMOUNT", "USD"
         );
         for (h, amount) in holdings.iter().zip(&shown) {
             // An unverified token in a wallet is usually an airdropped
             // lookalike, so it is marked rather than silently trusted.
-            let flag = if h.verified { "" } else { "  (unverified)" };
+            let mut flags = String::new();
+            if h.native {
+                flags.push_str("  (native)");
+            }
+            if !h.verified {
+                flags.push_str("  (unverified)");
+            }
             println!(
-                "{:<chain_width$}  {:<symbol_width$}  {:>amount_width$}  {:>14}{flag}",
+                "{:>8}  {:<chain_width$}  {:<symbol_width$}  {:>amount_width$}  {:>12}  {}{flags}",
+                h.chain_id,
                 h.chain,
                 h.symbol,
                 amount,
                 format!("${:.2}", h.usd),
+                h.address,
             );
         }
         println!(
-            "{:<chain_width$}  {:<symbol_width$}  {:>amount_width$}  {:>14}",
+            "{:>8}  {:<chain_width$}  {:<symbol_width$}  {:>amount_width$}  {:>12}",
+            "",
             "TOTAL",
             "",
             "",
@@ -144,6 +157,7 @@ impl Output {
                         "name": c.name,
                         "native_symbol": c.currency.symbol,
                         "native_decimals": c.currency.decimals,
+                        "native_token_address": c.currency.address,
                         "usable": c.is_evm(),
                         "sending_enabled": c.sending_enabled,
                         "receiving_enabled": c.receiving_enabled,

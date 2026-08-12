@@ -71,6 +71,12 @@ unit. `acp-connect::setup` is what `create` runs.
   4 keystore unavailable, 5 wallet exists, 6 upstream API failure.
 - **Token amounts stay strings in JSON.** They routinely exceed what an IEEE
   double holds exactly; the table truncates for display, the JSON does not.
+- **Every listing prints the identifier a later command takes as input**, in
+  full and in both output modes: `chain_id` for chains, the token address for
+  balances. Never abbreviate an address for display — a truncated one looks
+  usable and is not. Native value is the `0xeeee…eeee` sentinel
+  (`acp_api::NATIVE_TOKEN_ADDRESS`), which is itself a valid swap input, and
+  is flagged `native` so a caller knows it cannot be approved like an ERC-20.
 - **The recovery phrase must never reach stdout or stderr.** The caller is an
   AI agent that reads and logs this process's output, so the phrase is shown
   only in the browser. `Output::wallet` deliberately takes no phrase

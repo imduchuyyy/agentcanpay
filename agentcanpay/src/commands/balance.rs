@@ -15,6 +15,7 @@ pub struct Holding {
     pub amount: String,
     pub usd: f64,
     pub verified: bool,
+    pub native: bool,
 }
 
 /// Lists what the wallet holds, across every supported chain.
@@ -102,6 +103,7 @@ fn collect(
                     amount: t.amount(),
                     usd: t.usd(),
                     verified: t.is_verified.unwrap_or(false),
+                    native: t.is_native(),
                 })
         })
         .collect();
@@ -227,6 +229,32 @@ mod tests {
     fn chains_resolve_by_id_or_name_case_insensitively() {
         let picked = selected_chains(&chains(), &["8453".into(), "ethereum".into()]).unwrap();
         assert_eq!(picked, vec![8453, 1]);
+    }
+
+    /// The address must survive into the holding unchanged: it is the
+    /// identifier an agent feeds to a later swap or transfer.
+    #[test]
+    fn carries_the_token_address_through_verbatim() {
+        let mut t = token("USDC", Some("1000000"), Some(1.0));
+        t.address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".into();
+        let lists = BTreeMap::from([(1, vec![t])]);
+
+        let held = collect(&lists, &names(), 0.0);
+        assert_eq!(
+            held[0].address,
+            "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        );
+        assert!(!held[0].native);
+        assert_eq!(held[0].chain_id, 1);
+    }
+
+    #[test]
+    fn flags_the_native_currency() {
+        let mut t = token("ETH", Some("1000000000000000000"), Some(2000.0));
+        t.address = acp_api::NATIVE_TOKEN_ADDRESS.to_owned();
+        let lists = BTreeMap::from([(1, vec![t])]);
+
+        assert!(collect(&lists, &names(), 0.0)[0].native);
     }
 
     /// An empty wallet must total 0.00, not -0.00.

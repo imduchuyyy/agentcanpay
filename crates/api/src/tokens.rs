@@ -1,6 +1,13 @@
 use alloy::primitives::{U256, utils::format_units};
 use serde::Deserialize;
 
+/// The pseudo-address Socket uses for a chain's native currency.
+///
+/// It is what the swap and bridge endpoints expect as a token identifier
+/// for native value, so it is a usable input rather than a placeholder to
+/// be translated.
+pub const NATIVE_TOKEN_ADDRESS: &str = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
 /// Which token list to request.
 ///
 /// `Full` is upwards of fifty thousand tokens per chain; `Trending` is a
@@ -78,6 +85,14 @@ impl Token {
     pub fn usd(&self) -> f64 {
         self.balance_in_usd.unwrap_or(0.0)
     }
+
+    /// Whether this is the chain's native currency rather than a contract.
+    ///
+    /// Worth surfacing: native value cannot be approved like an ERC-20, and
+    /// spending it competes with gas.
+    pub fn is_native(&self) -> bool {
+        self.address.eq_ignore_ascii_case(NATIVE_TOKEN_ADDRESS)
+    }
 }
 
 #[cfg(test)]
@@ -115,6 +130,19 @@ mod tests {
         let t = token(Some("10000000000000000000000000000"), 18);
         assert!(t.has_balance());
         assert_eq!(t.amount(), "10000000000");
+    }
+
+    #[test]
+    fn recognises_the_native_sentinel_whatever_its_case() {
+        let mut t = token(Some("1"), 18);
+        t.address = NATIVE_TOKEN_ADDRESS.to_uppercase().replace("0X", "0x");
+        assert!(t.is_native());
+
+        t.address = NATIVE_TOKEN_ADDRESS.to_owned();
+        assert!(t.is_native());
+
+        t.address = "0x4200000000000000000000000000000000000006".into();
+        assert!(!t.is_native(), "WETH is a contract, not native value");
     }
 
     #[test]
