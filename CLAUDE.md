@@ -37,6 +37,16 @@ stdout). Run the CLI: `cargo run -p agentcanpay -- <args>`.
 Set `AGENTCANPAY_HOME` to a temp dir when exercising the CLI by hand, so you
 never touch a real wallet at `~/.agentcanpay`.
 
+## Releasing
+
+Publishing a GitHub release triggers `.github/workflows/release.yml`, which
+builds `agentcanpay` for Linux, macOS and Windows and attaches an archive
+plus a `.sha256` to that release. Bump `version` in the workspace
+`Cargo.toml` **before** tagging: the workflow refuses to build when the tag
+and the workspace version disagree, so a binary can never report a version
+its release does not. Re-run a failed target with the workflow's
+`workflow_dispatch` input rather than re-cutting the release.
+
 ## Layout
 
 | Crate | Owns |

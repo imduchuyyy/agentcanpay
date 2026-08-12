@@ -1,0 +1,122 @@
+name: Release
+
+# Publishing a release is the trigger, not pushing a tag: the release has to
+# exist before anything can be attached to it. `workflow_dispatch` re-runs
+# the same build against an existing tag, for when a runner fails and the
+# release is already out.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and attach binaries to
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  # A binary that reports a different version than the release it hangs off
+  # is worse than a missing one, so this fails before any build starts.
+  check-version:
+    name: Version matches the tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Compare Cargo.toml with the tag
+        run: |
+          crate=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          tagged=${TAG#v}
+          if [ "$crate" != "$tagged" ]; then
+            echo "::error::tag $TAG expects version $tagged, workspace says $crate"
+            exit 1
+          fi
+          echo "building $crate"
+
+  build:
+    name: ${{ matrix.target }}
+    needs: check-version
+    runs-on: ${{ matrix.os }}
+    # Every target builds on its own architecture rather than cross-
+    # compiling: the rustls backend pulls in aws-lc-sys, which needs a C
+    # toolchain per target and is the usual reason a cross build fails.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      # Pinned to the same version as rust-toolchain.toml and pr.yml; bump
+      # all three together.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.94.0
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # --locked so the published binary is built from the dependency
+      # versions that were tested, not whatever resolved today.
+      - name: Build
+        run: cargo build --release --locked -p agentcanpay --target ${{ matrix.target }}
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="agentcanpay-${TAG}-${{ matrix.target }}"
+          mkdir "$name"
+          cp README.md "$name/"
+
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "target/${{ matrix.target }}/release/agentcanpay.exe" "$name/"
+            7z a -tzip "$name.zip" "$name" > /dev/null
+            asset="$name.zip"
+          else
+            cp "target/${{ matrix.target }}/release/agentcanpay" "$name/"
+            tar czf "$name.tar.gz" "$name"
+            asset="$name.tar.gz"
+          fi
+
+          # Checksums are worth publishing for anything that touches a
+          # recovery phrase: they are how someone verifies the binary they
+          # downloaded is the one this workflow produced.
+          if command -v sha256sum > /dev/null; then
+            sha256sum "$asset" > "$asset.sha256"
+          else
+            shasum -a 256 "$asset" > "$asset.sha256"
+          fi
+
+          echo "ASSET=$asset" >> "$GITHUB_ENV"
+
+      # --clobber so a re-run replaces its own asset instead of failing.
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$ASSET" "$ASSET.sha256" --clobber

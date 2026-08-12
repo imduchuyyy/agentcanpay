@@ -11,6 +11,11 @@ edition = "2024"
 rust-version = "1.94.0"
 license = "MIT"
 
+# Release binaries are published as release assets, where symbols are dead
+# weight: nobody debugging this CLI is doing it from a downloaded tarball.
+[profile.release]
+strip = "symbols"
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 
