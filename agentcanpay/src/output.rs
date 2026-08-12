@@ -1,5 +1,6 @@
-use acp_api::Chain;
+use acp_api::{Chain, NATIVE_TOKEN_ADDRESS};
 use acp_keystore::{Backend, Source};
+use acp_tx::Sent;
 use acp_wallet::DerivedAccount;
 
 use crate::commands::{CommandError, balance::Holding};
@@ -194,6 +195,53 @@ impl Output {
                 c.chain_id, c.name, c.currency.symbol
             );
         }
+    }
+
+    /// Reports a broadcast transfer.
+    ///
+    /// The hash is what a later lookup takes as input, so in plain mode it
+    /// is the only thing on stdout, exactly as `address` is. Native value
+    /// is reported under the same `0xeeee…eeee` sentinel `balance` prints,
+    /// so the two commands can be chained without translation.
+    pub fn transfer(&self, sent: &Sent, chain: &str) {
+        let token_address = sent
+            .token
+            .map_or_else(|| NATIVE_TOKEN_ADDRESS.to_owned(), |t| t.to_string());
+
+        if self.json {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "tx_hash": sent.hash,
+                    "chain_id": sent.chain_id,
+                    "chain": chain,
+                    "status": sent.status.as_str(),
+                    "from": sent.from.to_string(),
+                    "to": sent.to.to_string(),
+                    "token_address": token_address,
+                    "symbol": sent.symbol,
+                    "decimals": sent.decimals,
+                    // Strings for the same reason balances are: an amount
+                    // in the token's smallest unit outruns a double.
+                    "amount": sent.amount,
+                    "raw_amount": sent.raw_amount,
+                    "native": sent.is_native(),
+                    "block": sent.block,
+                    "gas_used": sent.gas_used,
+                })
+            );
+            return;
+        }
+
+        eprintln!(
+            "  sent:    {} {}\n  to:      {}\n  chain:   {chain} ({})\n  status:  {}\n",
+            sent.amount,
+            sent.symbol,
+            sent.to,
+            sent.chain_id,
+            sent.status.as_str(),
+        );
+        println!("{}", sent.hash);
     }
 
     pub fn error(&self, err: &CommandError) {

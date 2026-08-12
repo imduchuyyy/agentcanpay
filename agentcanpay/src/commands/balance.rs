@@ -70,13 +70,7 @@ fn selected_chains(chains: &[Chain], requested: &[String]) -> Result<Vec<u64>, C
 
     requested
         .iter()
-        .map(|want| {
-            chains
-                .iter()
-                .find(|c| c.chain_id.to_string() == *want || c.name.eq_ignore_ascii_case(want))
-                .map(|c| c.chain_id)
-                .ok_or_else(|| CommandError::UnknownChain(want.clone()))
-        })
+        .map(|want| super::find_chain(chains, want).map(|c| c.chain_id))
         .collect()
 }
 

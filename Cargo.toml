@@ -26,12 +26,20 @@ must_use_candidate = "allow"
 acp-api = { path = "crates/api" }
 acp-connect = { path = "crates/connect" }
 acp-keystore = { path = "crates/keystore" }
+acp-tx = { path = "crates/tx" }
 acp-wallet = { path = "crates/wallet" }
 
 alloy = { version = "2.0.5", default-features = false, features = [
     "std",
     "signer-mnemonic",
     "sol-types",
+    # Everything below is for `acp-tx`: reading a balance needs no chain
+    # access, but broadcasting a transfer does.
+    "contract",
+    "network",
+    "provider-http",
+    "reqwest-rustls-tls",
+    "rpc-types-eth",
 ] }
 askama = "0.16.0"
 axum = "0.8.9"

@@ -29,6 +29,9 @@ pub enum Command {
 
     /// List the chains this CLI can work with.
     Chains(ChainsArgs),
+
+    /// Send tokens or native currency to another address.
+    Transfer(TransferArgs),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -100,6 +103,44 @@ pub struct BalanceArgs {
     /// Hide holdings worth less than this many USD.
     #[arg(long, default_value_t = 0.0)]
     pub min_usd: f64,
+}
+
+/// Every field here is something the agent was told by the user, so unlike
+/// `create` there is nothing for a browser page to decide. The identifiers
+/// are exactly what `balance` and `chains` print.
+#[derive(Args)]
+pub struct TransferArgs {
+    /// Chain to send on, by id or name.
+    #[arg(long)]
+    pub chain: String,
+
+    /// Recipient address.
+    #[arg(long)]
+    pub to: String,
+
+    /// Amount in whole tokens, as a decimal string: `1.5`, not `1500000`.
+    #[arg(long)]
+    pub amount: String,
+
+    /// Token to send, by contract address, as printed by `balance`.
+    /// Defaults to the chain's native currency.
+    #[arg(long)]
+    pub token: Option<String>,
+
+    /// RPC endpoint to broadcast through. Defaults to a built-in public
+    /// one for the chain, which may rate-limit.
+    #[arg(long)]
+    pub rpc_url: Option<String>,
+
+    /// Return as soon as the transaction is broadcast, without waiting to
+    /// see whether it succeeded.
+    #[arg(long)]
+    pub no_wait: bool,
+
+    /// Seconds to wait for the transaction to be mined. On expiry the hash
+    /// is still reported, with status `pending`.
+    #[arg(long, default_value_t = 120)]
+    pub timeout: u64,
 }
 
 #[derive(Args)]

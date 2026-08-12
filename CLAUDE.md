@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `agentcanpay` — a Rust CLI that lets an AI agent hold and use a crypto wallet.
 Commands: `create` (set up the wallet), `address` (print the address),
 `reveal` (show the recovery phrase to the user in a browser page),
-`balance` (list holdings), `chains` (list supported chains).
+`balance` (list holdings), `chains` (list supported chains),
+`transfer` (send tokens or native currency to another address).
 
 **The CLI is for the agent; the browser page is for the human.** The agent
 cannot know whether the user wants a new wallet or an existing one, so it
@@ -45,6 +46,7 @@ never touch a real wallet at `~/.agentcanpay`.
 | `crates/keystore` (`acp-keystore`) | secret backends, wallet metadata, atomic writes |
 | `crates/connect` (`acp-connect`) | loopback browser flows: `setup` (used by `create`), `reveal`, `authorize` |
 | `crates/api` (`acp-api`) | HTTP client for the Socket.tech API — chains, token lists, balances; swap and bridge land here |
+| `crates/tx` (`acp-tx`) | the only crate that talks to a chain: RPC endpoints, amount scaling, signing and broadcasting transfers |
 
 `acp-connect::authorize` and `acp-wallet::kdf` implement an alternative flow
 where the wallet is derived from an external wallet's signature. They are
@@ -60,15 +62,20 @@ unit. `acp-connect::setup` is what `create` runs.
   only alongside a `KDF_ALG` version bump.
 - **`address` must never touch the credential store.** It reads `wallet.json`
   only, which is what keeps the common agent path free of unlock prompts.
-  Adding a secret read there would break that. `reveal` is the only command
-  that reads the secret, and so the only one that can prompt.
+  Adding a secret read there would break that. Only `reveal` and `transfer`
+  read the secret, and so only they can prompt: `reveal` to show the phrase,
+  `transfer` because signing needs the key. Both read it as late as possible,
+  after every failure that does not need it has already happened.
 - **`reveal` sends the phrase to the page only when the user asks.** The
   landing page has never seen it, and Hide re-renders without it rather than
   styling it out of view, so a page left open holds nothing.
 - **stdout is an API.** stdout carries the command's result and nothing
   else; progress and human chatter go to stderr. Under `--json` stdout is a
   single JSON object. Exit codes: 2 no wallet, 3 bad/absent phrase input,
-  4 keystore unavailable, 5 wallet exists, 6 upstream API failure.
+  4 keystore unavailable, 5 wallet exists, 6 upstream API or RPC failure,
+  7 transfer not completed. `transfer` prints its result object before
+  judging the status, so a reverted transaction still hands the caller its
+  hash on stdout and then exits 7.
 - **Token amounts stay strings in JSON.** They routinely exceed what an IEEE
   double holds exactly; the table truncates for display, the JSON does not.
 - **Every listing prints the identifier a later command takes as input**, in
@@ -83,6 +90,17 @@ unit. `acp-connect::setup` is what `create` runs.
   parameter — keep it that way, so printing one requires adding a code path
   rather than passing an argument. It is likewise never a CLI argument,
   because argv is world-readable via `ps`.
+- **Amounts are scaled by the token's own decimals, read on-chain.** Guessing
+  18 would send a thousand times too much of a 6-decimal stablecoin, so a
+  token whose `decimals()` cannot be read is an error rather than a default.
+  Native decimals come from the chain listing for the same reason.
+  `scale_amount` is stricter than alloy's `parse_units` on purpose: it
+  rejects negatives (which convert into an enormous `U256`) and rejects more
+  precision than the token has (which `parse_units` silently truncates).
+- **`transfer` needs no browser step, and must not grow one.** Recipient,
+  token and amount were all given to the agent by the user, so nothing is
+  being guessed — the rule is that decisions the agent *cannot* know belong
+  in the page, not that spending does.
 - **`create` is the single entry point for wallet setup.** Adding a flag or
   subcommand that presets the user's choice puts the agent back in the
   position of guessing.
@@ -146,6 +164,31 @@ no RPC endpoint to configure and no on-chain call to make.
 - Tests decode recorded fixtures — never live calls. See
   `crates/api/tests/fixtures/README.md` to re-record.
 
+## Talking to a chain
+
+Reading needs no chain access; sending does. `acp-tx` is the only crate that
+opens an RPC connection, and it is where the alloy provider/contract
+features are for.
+
+- **Endpoints are a hand-maintained table** in `tx/rpc.rs`, because Socket
+  publishes routing data but no RPC URLs. Each entry was verified with
+  `eth_chainId` before being added — do the same for a new one. They are
+  public endpoints and will rate-limit, which is what `--rpc-url` is for. A
+  chain absent from the table is not unsupported; it just needs a URL.
+- **The chain id is checked against the endpoint before anything is signed.**
+  A transaction built for one chain is a valid transaction to submit on
+  another, so a wrong `--rpc-url` would otherwise spend real value on a
+  network the caller never named.
+- **Balance is checked before broadcasting**, and for native value the
+  estimated gas is added to it. An ERC-20 overdraw reverts and costs gas
+  while reporting nothing useful; native value competes with gas, so a
+  balance that covers the amount alone is still not enough. The gas check is
+  best-effort — a chain that prices gas unusually falls through to the
+  node's own rejection rather than blocking the transfer.
+- **A timeout waiting for a receipt is not a failure.** The transaction is
+  already broadcast; the caller gets the hash with status `pending`, which
+  is also what `--no-wait` returns.
+
 ## Testing without a browser
 
 Both browser flows have headless drivers, so `create` can be exercised
@@ -158,3 +201,21 @@ cargo run -p acp-connect --example fake_browser -- <url>   # authorize flow
 ```
 
 Start the CLI with `--print-url` to get the URL to pass them.
+
+## Testing transfers without spending anything
+
+Fork a chain locally and point `--rpc-url` at it. Keep anvil's `--chain-id`
+matching the forked chain, or the chain-id guard will reject the transfer —
+which is the guard working:
+
+```
+anvil --fork-url https://ethereum-rpc.publicnode.com --chain-id 1
+cargo run -p agentcanpay -- create --keystore file --print-url   # then
+cargo run -p acp-connect --example fake_setup -- <url> import \
+  "test test test test test test test test test test test junk"
+cargo run -p agentcanpay -- transfer --chain 1 --to <addr> --amount 1.5 \
+  --rpc-url http://127.0.0.1:8545
+```
+
+That phrase derives anvil's first prefunded account. For the ERC-20 path,
+move tokens in from a whale with `cast rpc anvil_impersonateAccount`.
