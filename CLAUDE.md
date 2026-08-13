@@ -45,6 +45,17 @@ the surface it documents** — a new command, a new or renamed flag, a changed
 default, a new exit code or error `kind`. It is the one doc that is wrong by
 default: `--help` regenerates itself, `SKILL.md` does not.
 
+It documents what an agent needs to *use the wallet*, which is not the whole
+surface. `setup` is deliberately absent: it installs this file, `install.sh`
+runs it, and an agent paying someone has no reason to call it — documenting
+it would spend context on a command that never comes up. Its exit code and
+`kind` are left out for the same reason. Keep that split when adding a
+command: if an agent doing a wallet task would never run it, it belongs in
+`--help` only.
+
+The file is embedded in the binary with `include_str!`, so editing it
+changes what `setup` installs. There is no separate copy to update.
+
 ## Releasing
 
 Publishing a GitHub release triggers `.github/workflows/release.yml`, which
