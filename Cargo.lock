@@ -93,6 +93,7 @@ dependencies = [
  "acp-wallet",
  "alloy",
  "clap",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 2.0.20",

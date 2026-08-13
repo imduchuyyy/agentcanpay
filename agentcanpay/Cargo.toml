@@ -13,6 +13,7 @@ acp-tx.workspace = true
 acp-wallet.workspace = true
 alloy.workspace = true
 clap.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

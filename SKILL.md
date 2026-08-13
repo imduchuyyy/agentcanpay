@@ -43,33 +43,32 @@ permission for a step they already implied. Builds exist for Linux, macOS
 and Windows on both architectures.
 
 ```bash
-# 1. Pick the target triple for this machine.
-case "$(uname -s)-$(uname -m)" in
-  Darwin-arm64)  target=aarch64-apple-darwin ;;
-  Darwin-x86_64) target=x86_64-apple-darwin ;;
-  Linux-x86_64)  target=x86_64-unknown-linux-gnu ;;
-  Linux-aarch64) target=aarch64-unknown-linux-gnu ;;
-esac   # Windows: x86_64-pc-windows-msvc, shipped as .zip
-
-# 2. Download the newest release, with its checksum.
-gh release download --repo imduchuyyy/agentcanpay \
-  --pattern "*${target}.tar.gz*"
-
-# 3. Verify before running it. This binary signs transactions.
-sha256sum -c ./*.sha256    # macOS: shasum -a 256 -c ./*.sha256
-
-# 4. Unpack and put it on PATH. ~/.local/bin needs no sudo; use
-#    /usr/local/bin only if the user wants it system-wide.
-tar xzf ./*.tar.gz
-mkdir -p ~/.local/bin && install ./agentcanpay-*/agentcanpay ~/.local/bin/
+curl -sSf https://raw.githubusercontent.com/imduchuyyy/agentcanpay/main/install.sh | sh
+export PATH="$PATH:$HOME/.agentcanpay/bin"   # if it is not already there
 agentcanpay --version
 ```
 
-Without `gh`, download the same assets from the release page with `curl -L`.
+The script picks the right build for the machine, verifies the download
+before installing it, and puts the binary in `~/.agentcanpay/bin` — a
+directory the user owns, so nothing needs `sudo`. On Windows, run
+`install.ps1` with PowerShell instead.
 
-**macOS**: release binaries are not notarized, so Gatekeeper quarantines
-them. If the binary is killed on launch, clear the flag:
-`xattr -d com.apple.quarantine ~/.local/bin/agentcanpay`.
+It reads three environment variables: `AGENTCANPAY_VERSION` to install a
+specific release rather than the newest, `AGENTCANPAY_BIN_DIR` to install
+somewhere else, and `AGENTCANPAY_IGNORE_VERIFICATION=true` to skip the
+verification — which you should not set, because this binary signs
+transactions.
+
+**Keeping it current**: `agentcanpay update` replaces the binary with the
+newest release, and `agentcanpay update --check` reports without installing.
+Both print the newest version on stdout. If an update fails it exits 8 and
+leaves the working binary alone; re-running the install script above is the
+fallback, and it is safe to run over an existing install.
+
+**macOS**: a binary installed by the script is not quarantined, because
+`curl` does not set the flag. One downloaded through a browser is — if it is
+killed on launch, clear it with
+`xattr -d com.apple.quarantine ~/.agentcanpay/bin/agentcanpay`.
 
 **From source** (needs Rust 1.94.0; the repo pins it in
 `rust-toolchain.toml`):
@@ -105,13 +104,15 @@ cargo build --release -p agentcanpay
 | 5 | a wallet already exists | use it, or `create --force` **only** if the human said to replace it |
 | 6 | upstream API or RPC failure | retryable; for `transfer`, pass a different `--rpc-url` |
 | 7 | transfer did not complete | read `kind` before retrying (see `transfer` below) |
+| 8 | `update` did not replace the binary | the existing one still works; re-run the install script |
 
 Under `--json`, `kind` names the cause exactly: `no_wallet`, `wallet_exists`,
 `secret_missing`, `no_credential_store`, `timeout`, `cancelled`,
 `needs_browser`, `invalid_phrase`, `unknown_chain`, `unusable_chain`,
 `no_account_for_chain`, `key_mismatch`, `api`, `rpc`, `no_rpc_endpoint`,
 `invalid_rpc_url`, `chain_mismatch`, `invalid_address`, `invalid_amount`,
-`not_a_token`, `insufficient_funds`, `rejected`, `reverted`.
+`not_a_token`, `insufficient_funds`, `rejected`, `reverted`, `update_check`,
+`update_managed`, `update_failed`.
 
 ## Global flags
 
@@ -266,6 +267,31 @@ when the human asks to back up, export, or "see" their wallet.
 ```bash
 agentcanpay reveal                         # tell the human to look at their browser
 ```
+
+### `update` — replace this binary with the newest release
+
+Fetches the newest published release and installs it over the running
+binary. Nothing in the wallet is touched: the recovery phrase, the stored
+key and the address all survive an update, so this needs no confirmation
+from the human. Both modes print the newest version on stdout.
+
+| Flag | Meaning |
+|---|---|
+| `--check` | report whether a newer release exists, install nothing |
+
+```bash
+agentcanpay --json update --check
+# {"current":"0.1.0","latest":"0.2.0","updated":false,"update_available":true,…}
+
+agentcanpay update                         # installs it
+```
+
+Exit 8 means the binary was not replaced and the existing one still works.
+Read `kind` to know what to do: `update_managed` means a package manager
+owns this install and must do the upgrade (the message names which);
+`update_check` means GitHub was unreachable, which is retryable; and
+`update_failed` means the install step did not finish, where re-running the
+install script is the fallback.
 
 ## Recipes
 

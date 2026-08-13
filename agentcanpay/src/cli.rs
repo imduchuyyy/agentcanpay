@@ -32,6 +32,16 @@ pub enum Command {
 
     /// Send tokens or native currency to another address.
     Transfer(TransferArgs),
+
+    /// Replace this binary with the newest published release.
+    Update(UpdateArgs),
+}
+
+#[derive(Args)]
+pub struct UpdateArgs {
+    /// Report whether a newer release exists without installing anything.
+    #[arg(long)]
+    pub check: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]

@@ -5,6 +5,7 @@ pub mod create;
 pub mod reveal;
 pub mod store;
 pub mod transfer;
+pub mod update;
 
 use std::process::ExitCode;
 
@@ -58,6 +59,15 @@ pub enum CommandError {
 
     #[error("transaction {0} reverted; nothing was transferred")]
     Reverted(String),
+
+    #[error("could not check for a newer release: {0}")]
+    UpdateCheck(String),
+
+    #[error("this binary is managed by {0}; update it with that instead")]
+    UpdateManaged(String),
+
+    #[error("update failed: {0}")]
+    UpdateFailed(String),
 }
 
 impl CommandError {
@@ -84,6 +94,9 @@ impl CommandError {
             Self::NotEvmChain(_) => "unusable_chain",
             Self::KeyMismatch => "key_mismatch",
             Self::Reverted(_) => "reverted",
+            Self::UpdateCheck(_) => "update_check",
+            Self::UpdateManaged(_) => "update_managed",
+            Self::UpdateFailed(_) => "update_failed",
         }
     }
 
@@ -110,6 +123,11 @@ impl CommandError {
             // sees it can be certain the transfer did not happen — except
             // for a revert, which consumed gas and is reported as such.
             Self::Tx(_) | Self::BadAddress(_) | Self::Reverted(_) => 7,
+            // 8 is "this binary was not replaced", for every reason. The
+            // wallet is untouched and the caller's fallback is the same
+            // either way: run the install script, which is the code path
+            // `update` drives anyway.
+            Self::UpdateCheck(_) | Self::UpdateManaged(_) | Self::UpdateFailed(_) => 8,
             _ => 1,
         };
         ExitCode::from(code)

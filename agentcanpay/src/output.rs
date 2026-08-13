@@ -244,6 +244,39 @@ impl Output {
         println!("{}", sent.hash);
     }
 
+    /// Reports the outcome of an update check or install.
+    ///
+    /// `latest` is on stdout in plain mode — the version now installed, or
+    /// the one available under `--check` — so a caller can compare it
+    /// without parsing prose, exactly as `address` prints a bare address.
+    pub fn update(&self, current: &str, latest: &str, updated: bool, path: &std::path::Path) {
+        if self.json {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "current": current,
+                    "latest": latest,
+                    "updated": updated,
+                    "update_available": !updated && latest != current,
+                    "path": path.display().to_string(),
+                })
+            );
+            return;
+        }
+
+        if updated {
+            eprintln!(
+                "  updated {current} -> {latest}\n  path:    {}\n",
+                path.display()
+            );
+        } else if latest == current {
+            eprintln!("  agentcanpay {current} is the newest release\n");
+        } else {
+            eprintln!("  agentcanpay {current} installed; {latest} is available\n");
+        }
+        println!("{latest}");
+    }
+
     pub fn error(&self, err: &CommandError) {
         if self.json {
             eprintln!(

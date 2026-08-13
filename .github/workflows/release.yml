@@ -15,6 +15,10 @@ on:
 
 permissions:
   contents: write
+  # Provenance is signed with a workflow OIDC token, and the attestation is
+  # recorded against the repository.
+  id-token: write
+  attestations: write
 
 env:
   TAG: ${{ github.event.release.tag_name || inputs.tag }}
@@ -85,11 +89,15 @@ jobs:
       - name: Build
         run: cargo build --release --locked -p agentcanpay --target ${{ matrix.target }}
 
+      # The asset name carries no version. That is what lets an installer
+      # construct a URL under `releases/latest/download/` and fetch the
+      # newest build with no API call, no token and no rate limit — the
+      # tag still names the release the asset hangs off.
       - name: Package
         shell: bash
         run: |
           set -euo pipefail
-          name="agentcanpay-${TAG}-${{ matrix.target }}"
+          name="agentcanpay-${{ matrix.target }}"
           mkdir "$name"
           cp README.md "$name/"
 
@@ -103,9 +111,10 @@ jobs:
             asset="$name.tar.gz"
           fi
 
-          # Checksums are worth publishing for anything that touches a
-          # recovery phrase: they are how someone verifies the binary they
-          # downloaded is the one this workflow produced.
+          # A checksum published beside the binary only proves the download
+          # was not corrupted: whoever could swap one could swap the other.
+          # It is the fallback for hosts without `gh`; the attestation below
+          # is what actually ties these bytes to this workflow.
           if command -v sha256sum > /dev/null; then
             sha256sum "$asset" > "$asset.sha256"
           else
@@ -114,9 +123,23 @@ jobs:
 
           echo "ASSET=$asset" >> "$GITHUB_ENV"
 
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ env.ASSET }}
+
+      # The bundle ships as a release asset so `gh attestation verify
+      # --bundle` works offline, without an API call or a logged-in gh.
+      - name: Stage the attestation bundle
+        shell: bash
+        run: cp "${{ steps.attest.outputs.bundle-path }}" "$ASSET.sigstore.json"
+
       # --clobber so a re-run replaces its own asset instead of failing.
       - name: Attach to the release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" "$ASSET" "$ASSET.sha256" --clobber
+        run: |
+          gh release upload "$TAG" \
+            "$ASSET" "$ASSET.sha256" "$ASSET.sigstore.json" --clobber
