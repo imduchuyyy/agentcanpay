@@ -3,6 +3,7 @@ pub mod balance;
 pub mod chains;
 pub mod create;
 pub mod reveal;
+pub mod setup;
 pub mod store;
 pub mod transfer;
 pub mod update;
@@ -68,6 +69,9 @@ pub enum CommandError {
 
     #[error("update failed: {0}")]
     UpdateFailed(String),
+
+    #[error("could not install the skill: {0}")]
+    Setup(String),
 }
 
 impl CommandError {
@@ -97,6 +101,7 @@ impl CommandError {
             Self::UpdateCheck(_) => "update_check",
             Self::UpdateManaged(_) => "update_managed",
             Self::UpdateFailed(_) => "update_failed",
+            Self::Setup(_) => "setup_failed",
         }
     }
 
@@ -128,6 +133,9 @@ impl CommandError {
             // either way: run the install script, which is the code path
             // `update` drives anyway.
             Self::UpdateCheck(_) | Self::UpdateManaged(_) | Self::UpdateFailed(_) => 8,
+            // 9 is "the skill was not written". The wallet works either
+            // way; only an agent's ability to discover it is affected.
+            Self::Setup(_) => 9,
             _ => 1,
         };
         ExitCode::from(code)

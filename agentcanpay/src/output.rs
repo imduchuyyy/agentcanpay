@@ -3,7 +3,11 @@ use acp_keystore::{Backend, Source};
 use acp_tx::Sent;
 use acp_wallet::DerivedAccount;
 
-use crate::commands::{CommandError, balance::Holding};
+use crate::commands::{
+    CommandError,
+    balance::Holding,
+    setup::{Action, ClientResult},
+};
 
 /// Renders results for two very different audiences: a human reading a
 /// terminal, and an agent parsing stdout.
@@ -275,6 +279,80 @@ impl Output {
             eprintln!("  agentcanpay {current} installed; {latest} is available\n");
         }
         println!("{latest}");
+    }
+
+    /// Reports where the skill was written, and what each detected agent
+    /// now points at. The canonical path is the one value on stdout: it is
+    /// the file a caller would read, edit or remove.
+    pub fn setup_install(&self, path: &std::path::Path, clients: &[ClientResult], dry_run: bool) {
+        if self.json {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "path": path.display().to_string(),
+                    "dry_run": dry_run,
+                    "clients": clients.iter().map(|c| serde_json::json!({
+                        "client": c.name,
+                        "path": c.path.display().to_string(),
+                        "action": c.action.as_str(),
+                    })).collect::<Vec<_>>(),
+                })
+            );
+            return;
+        }
+
+        let verb = if dry_run { "would write" } else { "wrote" };
+        eprintln!("  {verb}: {}", path.display());
+        for c in clients {
+            eprintln!(
+                "  {:<14} {}  ({})",
+                c.name,
+                c.path.display(),
+                c.action.as_str()
+            );
+        }
+        eprintln!();
+        println!("{}", path.display());
+    }
+
+    /// Lists the agents this machine has, and whether each already has the
+    /// skill. Reports rather than writes, so it never creates a directory.
+    pub fn setup_list(&self, path: &std::path::Path, clients: &[ClientResult]) {
+        if self.json {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "path": path.display().to_string(),
+                    "installed": path.exists(),
+                    "clients": clients.iter().map(|c| serde_json::json!({
+                        "client": c.name,
+                        "path": c.path.display().to_string(),
+                        "detected": !matches!(c.action, Action::NotDetected),
+                        "installed": c.path.exists(),
+                    })).collect::<Vec<_>>(),
+                })
+            );
+            return;
+        }
+
+        let state = if path.exists() {
+            "installed"
+        } else {
+            "not installed"
+        };
+        eprintln!("  {} ({state})", path.display());
+        for c in clients {
+            let detected = if matches!(c.action, Action::NotDetected) {
+                "not detected"
+            } else if c.path.exists() {
+                "has the skill"
+            } else {
+                "detected, not linked"
+            };
+            eprintln!("  {:<14} {detected}", c.name);
+        }
+        eprintln!();
+        println!("{}", path.display());
     }
 
     pub fn error(&self, err: &CommandError) {

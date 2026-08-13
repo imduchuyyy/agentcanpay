@@ -105,6 +105,7 @@ cargo build --release -p agentcanpay
 | 6 | upstream API or RPC failure | retryable; for `transfer`, pass a different `--rpc-url` |
 | 7 | transfer did not complete | read `kind` before retrying (see `transfer` below) |
 | 8 | `update` did not replace the binary | the existing one still works; re-run the install script |
+| 9 | `setup` did not write the skill | the wallet is unaffected; report it and carry on |
 
 Under `--json`, `kind` names the cause exactly: `no_wallet`, `wallet_exists`,
 `secret_missing`, `no_credential_store`, `timeout`, `cancelled`,
@@ -112,7 +113,7 @@ Under `--json`, `kind` names the cause exactly: `no_wallet`, `wallet_exists`,
 `no_account_for_chain`, `key_mismatch`, `api`, `rpc`, `no_rpc_endpoint`,
 `invalid_rpc_url`, `chain_mismatch`, `invalid_address`, `invalid_amount`,
 `not_a_token`, `insufficient_funds`, `rejected`, `reverted`, `update_check`,
-`update_managed`, `update_failed`.
+`update_managed`, `update_failed`, `setup_failed`.
 
 ## Global flags
 
@@ -267,6 +268,34 @@ when the human asks to back up, export, or "see" their wallet.
 ```bash
 agentcanpay reveal                         # tell the human to look at their browser
 ```
+
+### `setup` — install this skill where agents find it
+
+Writes this file to `~/.agents/skills/agentcanpay/SKILL.md`, the cross-client
+skill location, and links the directory of any agent that only scans its own
+(Claude Code's `~/.claude/skills/`). One canonical copy, so an update cannot
+leave two versions disagreeing. The copy it writes is embedded in the binary,
+so it always matches the commands that binary has.
+
+Only agents already present get a link — nothing is created for software the
+user does not have. `install.sh` runs this, so a normal install needs no
+separate step; `update` re-runs the installer, so the skill refreshes with
+the binary.
+
+| Flag | Meaning |
+|---|---|
+| `--list` | show which agents are installed and whether each has the skill |
+| `--dry-run` | report what would be written, write nothing |
+| `--print` | print this file to stdout |
+
+```bash
+agentcanpay setup --list                   # what is on this machine
+agentcanpay setup                          # write and link
+agentcanpay setup --print > SKILL.md       # the copy matching this binary
+```
+
+Exit 9 means the skill was not written; the wallet is unaffected and every
+other command still works.
 
 ### `update` — replace this binary with the newest release
 

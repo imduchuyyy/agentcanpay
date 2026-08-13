@@ -35,6 +35,27 @@ pub enum Command {
 
     /// Replace this binary with the newest published release.
     Update(UpdateArgs),
+
+    /// Teach the agents on this machine that this CLI exists, by writing
+    /// its skill file where they look for one.
+    Setup(SetupArgs),
+}
+
+/// Modes rather than options: each of these is a different thing to do,
+/// and combining them would have no meaning.
+#[derive(Args)]
+pub struct SetupArgs {
+    /// Report what would be written without writing anything.
+    #[arg(long, conflicts_with_all = ["list", "print"])]
+    pub dry_run: bool,
+
+    /// Show which agents are installed and whether each has the skill.
+    #[arg(long, conflicts_with = "print")]
+    pub list: bool,
+
+    /// Print the skill file to stdout.
+    #[arg(long)]
+    pub print: bool,
 }
 
 #[derive(Args)]

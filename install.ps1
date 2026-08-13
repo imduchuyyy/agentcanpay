@@ -123,6 +123,15 @@ try {
     Install-Binary $exe
     Say "installed agentcanpay to $BinDir\agentcanpay.exe"
 
+    # Best-effort: an agent that cannot find the skill still has a working
+    # binary, so this must never fail an install that already succeeded.
+    if ($env:AGENTCANPAY_NO_SKILL -ne 'true') {
+        & "$BinDir\agentcanpay.exe" setup | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Warn "installed the binary, but could not install the skill"
+        }
+    }
+
     if (($env:PATH -split ';') -notcontains $BinDir) {
         Say ''
         Say 'add it to your PATH:'

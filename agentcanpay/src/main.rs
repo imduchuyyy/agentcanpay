@@ -19,6 +19,7 @@ async fn main() -> std::process::ExitCode {
         Command::Chains(args) => commands::chains::run(args, &out).await,
         Command::Transfer(args) => commands::transfer::run(args, &out).await,
         Command::Update(args) => commands::update::run(args, &out).await,
+        Command::Setup(args) => commands::setup::run(args, &out),
     };
 
     match result {

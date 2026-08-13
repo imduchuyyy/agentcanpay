@@ -24,6 +24,7 @@ Environment variables:
   AGENTCANPAY_VERSION               Install this version instead of the latest
   AGENTCANPAY_BIN_DIR               Install here instead of ~/.agentcanpay/bin
   AGENTCANPAY_IGNORE_VERIFICATION   Skip verification when set to "true"
+  AGENTCANPAY_NO_SKILL              Do not install the agent skill file
 EOF
 }
 
@@ -83,7 +84,22 @@ set AGENTCANPAY_BIN_DIR and re-run, or unpack $_asset by hand"
     fi
 
     install_binary "${_dir}/agentcanpay"
+    install_skill
     post_install
+}
+
+# Installing the binary without the skill leaves an agent with no way to
+# know it exists, so this is part of installing rather than a second step.
+# Best-effort on purpose: a home directory the skill cannot be written to
+# is not a reason to fail an install that already succeeded.
+install_skill() {
+    if [ "${AGENTCANPAY_NO_SKILL:-false}" = true ]; then
+        return 0
+    fi
+    if ! "${BIN_DIR}/agentcanpay" setup > /dev/null; then
+        warn "installed the binary, but could not install the skill.
+run '${BIN_DIR}/agentcanpay setup' to see why"
+    fi
 }
 
 install_binary() {
